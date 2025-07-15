@@ -30,7 +30,7 @@ export default function Navbar({ user }: NavbarProps) {
           <div className="flex">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center">
-              <Link href="/dashboard" className="flex items-center">
+              <Link href="/main/homepage" className="flex items-center">
                 <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
                   <span className="text-white font-bold text-lg">C</span>
                 </div>
@@ -41,7 +41,7 @@ export default function Navbar({ user }: NavbarProps) {
             {/* Desktop Navigation */}
             <div className="hidden md:ml-8 md:flex md:space-x-8">
               <Link
-                href="/dashboard"
+                href="/main/homepage"
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
               >
                 Dashboard
