@@ -13,7 +13,7 @@ export default function ProfilePage() {
         email: 'sarah@smithclinic.com',
         phone: '+1 (555) 123-4567',
         specialization: 'General Practitioner',
-        licenseNumber: 'MD-12345-2023',
+        role: 'Lab Technician',
         joinDate: '2023-01-15',
         profileImage: '/api/placeholder/150/150'
     })
@@ -102,7 +102,7 @@ export default function ProfilePage() {
                         <nav className="-mb-px flex space-x-8 px-6">
                             {[
                                 { key: 'profile', label: 'Personal Info', icon: User },
-                                { key: 'clinic', label: 'Clinic Details', icon: Building2 },
+                                // { key: 'clinic', label: 'Clinic Details', icon: Building2 },
                                 { key: 'security', label: 'Security', icon: Shield },
                                 { key: 'notifications', label: 'Notifications', icon: Bell }
                             ].map((tab) => {
@@ -112,8 +112,8 @@ export default function ProfilePage() {
                                         key={tab.key}
                                         onClick={() => setActiveTab(tab.key as any)}
                                         className={`${activeTab === tab.key
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                             } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
                                     >
                                         <Icon className="h-4 w-4 mr-2" />
@@ -213,12 +213,12 @@ export default function ProfilePage() {
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            License Number
+                                            Role
                                         </label>
                                         <input
                                             type="text"
-                                            value={userData.licenseNumber}
-                                            onChange={(e) => setUserData({ ...userData, licenseNumber: e.target.value })}
+                                            value={userData.role}
+                                            onChange={(e) => setUserData({ ...userData, role: e.target.value })}
                                             disabled={!isEditing}
                                             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
                                         />
@@ -235,132 +235,6 @@ export default function ProfilePage() {
                                                 value={userData.joinDate}
                                                 disabled={true}
                                                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Clinic Details Tab */}
-                        {activeTab === 'clinic' && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Clinic Name
-                                        </label>
-                                        <div className="relative">
-                                            <Building2 className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                            <input
-                                                type="text"
-                                                value={clinicData.name}
-                                                onChange={(e) => setClinicData({ ...clinicData, name: e.target.value })}
-                                                disabled={!isEditing}
-                                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Address
-                                        </label>
-                                        <div className="relative">
-                                            <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                            <input
-                                                type="text"
-                                                value={clinicData.address}
-                                                onChange={(e) => setClinicData({ ...clinicData, address: e.target.value })}
-                                                disabled={!isEditing}
-                                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            City
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={clinicData.city}
-                                            onChange={(e) => setClinicData({ ...clinicData, city: e.target.value })}
-                                            disabled={!isEditing}
-                                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            State
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={clinicData.state}
-                                            onChange={(e) => setClinicData({ ...clinicData, state: e.target.value })}
-                                            disabled={!isEditing}
-                                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            ZIP Code
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={clinicData.zipCode}
-                                            onChange={(e) => setClinicData({ ...clinicData, zipCode: e.target.value })}
-                                            disabled={!isEditing}
-                                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Clinic Phone
-                                        </label>
-                                        <div className="relative">
-                                            <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                            <input
-                                                type="tel"
-                                                value={clinicData.phone}
-                                                onChange={(e) => setClinicData({ ...clinicData, phone: e.target.value })}
-                                                disabled={!isEditing}
-                                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Clinic Email
-                                        </label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                            <input
-                                                type="email"
-                                                value={clinicData.email}
-                                                onChange={(e) => setClinicData({ ...clinicData, email: e.target.value })}
-                                                disabled={!isEditing}
-                                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Website
-                                        </label>
-                                        <div className="relative">
-                                            <Globe className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                                            <input
-                                                type="url"
-                                                value={clinicData.website}
-                                                onChange={(e) => setClinicData({ ...clinicData, website: e.target.value })}
-                                                disabled={!isEditing}
-                                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
                                             />
                                         </div>
                                     </div>
