@@ -26,7 +26,7 @@ export default function UploadPage() {
     const [isProcessing, setIsProcessing] = useState(false)
     const [isDragOver, setIsDragOver] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const miniUploadInputRef = useRef<HTMLInputElement>(null) // Add separate ref for mini upload
+    const miniUploadInputRef = useRef<HTMLInputElement>(null)
 
     // Mock user data
     const user = {
@@ -81,8 +81,6 @@ export default function UploadPage() {
                 }
 
                 setUploadedFiles(prev => [...prev, newFile])
-
-                // Simulate upload progress
                 simulateUpload(newFile.id)
             }
         })
@@ -126,7 +124,6 @@ export default function UploadPage() {
         setUploadedFiles(prev => prev.filter(file => file.id !== fileId))
         if (selectedFilePreview === fileId) {
             setSelectedFilePreview(null)
-            // Clean up the preview URL
             if (previewUrl) {
                 URL.revokeObjectURL(previewUrl)
                 setPreviewUrl(null)
@@ -134,16 +131,13 @@ export default function UploadPage() {
         }
     }
 
-    // Add this function to handle PDF preview
     const handleFilePreview = (fileId: string) => {
         const file = uploadedFiles.find(f => f.id === fileId)
         if (file && file.status === 'completed') {
-            // Clean up previous preview URL
             if (previewUrl) {
                 URL.revokeObjectURL(previewUrl)
             }
 
-            // Create new object URL for the PDF
             const url = URL.createObjectURL(file.file)
             setPreviewUrl(url)
             setSelectedFilePreview(fileId)
@@ -194,7 +188,7 @@ export default function UploadPage() {
                                 id="template"
                                 value={selectedTemplate}
                                 onChange={(e) => setSelectedTemplate(e.target.value)}
-                                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                className="block w-full px-3 py-2 bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                             >
                                 <option value="">Select template type...</option>
                                 {pdfTemplates.map((template) => (
