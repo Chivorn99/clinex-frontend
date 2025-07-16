@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, FileText, User, Calendar, Clock, Phone, Plus, Trash2, Edit, Save, X, Eye, CheckCircle, AlertTriangle, Maximize, Minimize, Clock as ClockIcon } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface PatientInfo {
     name: string
@@ -46,7 +47,8 @@ export default function VerificationPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const batchId = searchParams.get('batch')
-
+    const { user } = useAuth()
+    
     const [isProcessing, setIsProcessing] = useState(true)
     const [reports, setReports] = useState<ProcessedReport[]>([])
     const [selectedReport, setSelectedReport] = useState<ProcessedReport | null>(null)
@@ -59,12 +61,19 @@ export default function VerificationPage() {
     const [newCategoryName, setNewCategoryName] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
 
-    // Mock user data
-    const user = {
+    // Fallback mock user data
+    const mockUser = {
         name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
+
+    // Use auth user if available, otherwise fallback to mock
+    const currentUser = user ? {
+        name: user.name,
+        email: user.email,
+        clinic: 'Smith Medical Clinic'
+    } : mockUser
 
     // Mock processed reports data
     const mockReports: ProcessedReport[] = [
@@ -326,7 +335,7 @@ export default function VerificationPage() {
 
     if (processingAnimation || isProcessing) {
         return (
-            <DashboardLayout user={user}>
+            <DashboardLayout>
                 <div className="min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <div className="relative">
@@ -351,7 +360,7 @@ export default function VerificationPage() {
     }
 
     return (
-        <DashboardLayout user={user}>
+        <DashboardLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">

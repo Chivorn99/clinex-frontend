@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Upload, FileText, Trash2, Eye, Download, AlertCircle, CheckCircle, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface UploadedFile {
     id: string
@@ -20,6 +21,7 @@ interface PDFTemplate {
 }
 
 export default function UploadPage() {
+    const { user } = useAuth()
     const [selectedTemplate, setSelectedTemplate] = useState<string>('')
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
     const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null)
@@ -30,12 +32,19 @@ export default function UploadPage() {
     const miniUploadInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
 
-    // Mock user data
-    const user = {
+    // Fallback mock user data
+    const mockUser = {
         name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
+
+    // Use auth user if available, otherwise fallback to mock
+    const currentUser = user ? {
+        name: user.name,
+        email: user.email,
+        clinic: 'Smith Medical Clinic'
+    } : mockUser
 
     // PDF Templates
     const pdfTemplates: PDFTemplate[] = [
@@ -172,7 +181,7 @@ export default function UploadPage() {
         : 0
 
     return (
-        <DashboardLayout user={user}>
+        <DashboardLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div>

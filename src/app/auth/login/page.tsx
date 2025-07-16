@@ -3,21 +3,44 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // TODO: Implement login logic with backend
-    setTimeout(() => setIsLoading(false), 2000)
-    router.push("/main/homepage")
-}
+    setError('')
+
+    try {
+      const response = await apiClient.post('/login', {
+        email,
+        password,
+      })
+
+      // Handle both token formats (access_token from Laravel Sanctum)
+      const token = response.access_token || response.token
+      
+      if (token && response.user) {
+        login(token, response.user)
+        router.push("/main/homepage")
+      } else {
+        setError('Invalid response from server. Missing token or user data.')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
@@ -34,16 +57,22 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Sign In Form */}
         <div className="bg-white py-8 px-6 shadow-lg rounded-xl border border-gray-100">
           <form className="space-y-6" onSubmit={handleLogin}>
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-800 mb-2">
                 Email address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-800" />
+                  <Mail className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
                   id="email"
@@ -58,6 +87,7 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-800 mb-2">
                 Password
@@ -91,7 +121,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Forgot Password Link */}
             <div className="flex items-center justify-end">
               <Link
                 href="/auth/forgot-password"
@@ -101,12 +130,10 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            {/* Sign In Button */}
             <button
               type="submit"
               disabled={isLoading}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition duration-200"
-            onClick={handleLogin}
             >
               {isLoading ? (
                 <div className="flex items-center">
@@ -120,7 +147,6 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Sign Up Link */}
         <div className="text-center">
           <p className="text-sm text-gray-600">
             New to Clinex?{' '}

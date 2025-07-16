@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, Calendar, FileText, Users, AlertTriangle } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface Report {
     id: string
@@ -29,17 +30,25 @@ interface Batch {
 }
 
 export default function ReportsPage() {
+    const { user } = useAuth()
     const [activeTab, setActiveTab] = useState<'all' | 'verified' | 'unverified' | 'batches'>('all')
     const [searchQuery, setSearchQuery] = useState('')
     const [filterType, setFilterType] = useState('all')
     const router = useRouter()
 
-    // Mock user data
-    const user = {
+    // Fallback mock user data
+    const mockUser = {
         name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
+
+    // Use auth user if available, otherwise fallback to mock
+    const currentUser = user ? {
+        name: user.name,
+        email: user.email,
+        clinic: 'Smith Medical Clinic'
+    } : mockUser
 
     // Mock reports data
     const reports: Report[] = [
@@ -228,7 +237,7 @@ export default function ReportsPage() {
     }
 
     return (
-        <DashboardLayout user={user}>
+        <DashboardLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div>

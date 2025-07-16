@@ -2,18 +2,20 @@
 import { useState } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { User, Building2, Mail, Phone, MapPin, Calendar, Edit3, Save, X, Camera, Shield, Bell, Globe } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function ProfilePage() {
+    const { user: authUser } = useAuth() // ✅ Renamed to avoid conflict
     const [isEditing, setIsEditing] = useState(false)
     const [activeTab, setActiveTab] = useState<'profile' | 'clinic' | 'security' | 'notifications'>('profile')
 
-    // Mock user data
+    // Initialize userData based on auth user or mock data
     const [userData, setUserData] = useState({
-        name: 'Dr. Sarah Johnson',
-        email: 'sarah@smithclinic.com',
+        name: authUser?.name || 'Dr. Sarah Johnson',
+        email: authUser?.email || 'sarah@smithclinic.com',
         phone: '+1 (555) 123-4567',
         specialization: 'General Practitioner',
-        role: 'Lab Technician',
+        role: authUser?.role || 'Lab Technician',
         joinDate: '2023-01-15',
         profileImage: '/api/placeholder/150/150'
     })
@@ -44,7 +46,8 @@ export default function ProfilePage() {
         weeklyDigest: true
     })
 
-    const user = {
+    // ✅ No conflict now - this creates a local user object for display
+    const currentUser = {
         name: userData.name,
         email: userData.email,
         clinic: clinicData.name
@@ -60,7 +63,7 @@ export default function ProfilePage() {
     }
 
     return (
-        <DashboardLayout user={user}>
+        <DashboardLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex justify-between items-center">

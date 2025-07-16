@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, FileText, User, Calendar, Clock, Phone, CheckCircle, AlertTriangle, Download, Edit, Maximize, Minimize } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface PatientInfo {
     name: string
@@ -40,17 +41,25 @@ export default function ReportDetailsPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const reportId = searchParams.get('id')
+    const { user } = useAuth()
     
     const [reportData, setReportData] = useState<ReportData | null>(null)
     const [loading, setLoading] = useState(true)
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false)
 
     // Mock user data
-    const user = {
+    const mockUser = {
         name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
+
+    // Use auth user if available, otherwise fallback to mock
+    const currentUser = user ? {
+        name: user.name,
+        email: user.email,
+        clinic: 'Smith Medical Clinic'
+    } : mockUser
 
     // Mock extracted data - this would come from your API
     const mockReportData: ReportData = {
@@ -165,7 +174,7 @@ export default function ReportDetailsPage() {
 
     if (loading) {
         return (
-            <DashboardLayout user={user}>
+            <DashboardLayout>
                 <div className="flex items-center justify-center min-h-96">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
@@ -175,7 +184,7 @@ export default function ReportDetailsPage() {
 
     if (!reportData) {
         return (
-            <DashboardLayout user={user}>
+            <DashboardLayout>
                 <div className="text-center py-12">
                     <p className="text-gray-500">Report not found</p>
                 </div>
@@ -187,7 +196,7 @@ export default function ReportDetailsPage() {
     const pdfUrl = "/api/placeholder/400/600" // Replace with actual PDF URL
 
     return (
-        <DashboardLayout user={user}>
+        <DashboardLayout>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">

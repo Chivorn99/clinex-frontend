@@ -2,8 +2,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff, Mail, Lock, User, Building2, Check, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { apiClient } from '@/lib/api'
 
 export default function SignUpPage() {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     fullName: '',
     clinicName: '',
@@ -13,6 +16,8 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   // Password strength validation
   const passwordStrength = {
@@ -35,11 +40,31 @@ export default function SignUpPage() {
     if (!agreedToTerms || !isPasswordStrong) return
     
     setIsLoading(true)
-    // TODO: Implement signup logic with backend
-    setTimeout(() => setIsLoading(false), 2000) // Temporary loading simulation
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await apiClient.post('/register', {
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.password,
+      })
+
+      setSuccess('Account created successfully! Redirecting to login...')
+      
+      setTimeout(() => {
+        router.push('/auth/login')
+      }, 2000)
+
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const isFormValid = formData.fullName && formData.clinicName && formData.email && isPasswordStrong && agreedToTerms
+  const isFormValid = formData.fullName && formData.email && isPasswordStrong && agreedToTerms
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
@@ -60,6 +85,19 @@ export default function SignUpPage() {
         {/* Sign Up Form */}
         <div className="bg-white py-8 px-6 shadow-lg rounded-xl border border-gray-100">
           <form className="space-y-6" onSubmit={handleSignUp}>
+            {/* Error and Success Messages */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <p className="text-sm text-green-600">{success}</p>
+              </div>
+            )}
+
             {/* Full Name Field */}
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">

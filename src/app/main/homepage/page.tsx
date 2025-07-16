@@ -4,18 +4,26 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import Link from 'next/link'
 import { Calendar, Users, Clock, TrendingUp, Plus, X, Eye, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function HomePage() {
     const router = useRouter()
+    const { user } = useAuth()
     const [showRecentReports, setShowRecentReports] = useState(false)
 
-    // Mock user data - this will come from authentication later
-    const user = {
-        name: 'Dr. Vorn Johnson',
+    // Fallback mock user data in case auth context doesn't have user
+    const mockUser = {
+        name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
+
+    // Use auth user if available, otherwise fallback to mock
+    const currentUser = user ? {
+        name: user.name,
+        email: user.email,
+        clinic: 'Smith Medical Clinic' // Default clinic name
+    } : mockUser
 
     // Mock stats data
     const stats = [
@@ -79,7 +87,7 @@ export default function HomePage() {
 
     return (
         <>
-            <DashboardLayout user={user}>
+            <DashboardLayout>
                 <div className="space-y-6">
                     {/* Welcome Header */}
                     <div className="bg-white shadow rounded-lg">
@@ -87,10 +95,10 @@ export default function HomePage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h1 className="text-3xl font-bold text-gray-900">
-                                        Welcome back, {user.name.split(' ')[1]}! 👋
+                                        Welcome back, {currentUser.name.split(' ')[1]}! 👋
                                     </h1>
                                     <p className="mt-2 text-gray-600">
-                                        Here's what's happening at {user.clinic} today
+                                        Here's what's happening at {currentUser.clinic} today
                                     </p>
                                 </div>
                                 <div className="flex space-x-3">
@@ -164,7 +172,7 @@ export default function HomePage() {
                                     </button>
                                     <button className="flex flex-col items-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                                         <Calendar className="h-8 w-8 text-gray-400 mb-2" />
-                                        <span className="text-sm font-medium text-gray-900">View Queue</span>
+                                        <span className="text-sm font-medium text-gray-900">View Schedule</span>
                                     </button>
                                     <button className="flex flex-col items-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                                         <TrendingUp className="h-8 w-8 text-gray-400 mb-2" />
@@ -253,22 +261,19 @@ export default function HomePage() {
                 </div>
             </DashboardLayout>
 
-            {/* Recent Reports Modal - MOVED OUTSIDE DashboardLayout */}
+            {/* Recent Reports Modal */}
             {showRecentReports && (
                 <div className="fixed inset-0 z-[9999] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                        {/* Background overlay - Made more transparent */}
                         <div
-                            className="fixed inset-0 bg-opacity-80 backdrop-blur-sm transition-opacity"
+                            className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
                             aria-hidden="true"
                             onClick={() => setShowRecentReports(false)}
                         ></div>
 
                         <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-                        {/* Modal panel */}
-                        <div className="relative inline-block align-bottom bg-white border-grey-700 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-                            {/* Header */}
+                        <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
                             <div className="bg-white px-6 py-4 border-b border-gray-200">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-lg font-medium text-gray-900" id="modal-title">
@@ -285,7 +290,6 @@ export default function HomePage() {
                                 </div>
                             </div>
 
-                            {/* Content */}
                             <div className="bg-white px-6 py-4 max-h-96 overflow-y-auto">
                                 <div className="space-y-3">
                                     {recentReports.map((report) => (
@@ -329,7 +333,6 @@ export default function HomePage() {
                                 </div>
                             </div>
 
-                            {/* Footer */}
                             <div className="bg-gray-50 px-6 py-4">
                                 <div className="flex justify-between space-x-3">
                                     <button
