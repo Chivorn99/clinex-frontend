@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Upload, FileText, Trash2, Eye, Download, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface UploadedFile {
     id: string
@@ -27,6 +28,7 @@ export default function UploadPage() {
     const [isDragOver, setIsDragOver] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const miniUploadInputRef = useRef<HTMLInputElement>(null)
+    const router = useRouter()
 
     // Mock user data
     const user = {
@@ -147,9 +149,12 @@ export default function UploadPage() {
     const handleProcess = () => {
         if (!selectedTemplate || uploadedFiles.length === 0) return
         setIsProcessing(true)
-        // TODO: Navigate to waiting page after processing
+        
+        // TODO: Replace with actual batch processing API call
         setTimeout(() => {
-            console.log('Processing completed, navigate to waiting page')
+            console.log('Processing completed, navigating to verification')
+            // Navigate to verification page with batch ID
+            router.push(`/main/verification?batch=batch_${Date.now()}`)
         }, 2000)
     }
 
