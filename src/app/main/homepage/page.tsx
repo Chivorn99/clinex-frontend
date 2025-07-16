@@ -11,21 +11,18 @@ export default function HomePage() {
     const { user } = useAuth()
     const [showRecentReports, setShowRecentReports] = useState(false)
 
-    // Fallback mock user data in case auth context doesn't have user
     const mockUser = {
         name: 'Dr. Sarah Johnson',
         email: 'sarah@smithclinic.com',
         clinic: 'Smith Medical Clinic'
     }
 
-    // Use auth user if available, otherwise fallback to mock
     const currentUser = user ? {
         name: user.name,
         email: user.email,
-        clinic: 'Smith Medical Clinic' // Default clinic name
+        clinic: 'Smith Medical Clinic'
     } : mockUser
 
-    // Mock stats data
     const stats = [
         {
             name: 'Total Patients',
@@ -57,7 +54,6 @@ export default function HomePage() {
         },
     ]
 
-    // Mock recent reports data
     const recentReports = [
         {
             id: 'rpt_001',

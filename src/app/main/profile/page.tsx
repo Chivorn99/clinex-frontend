@@ -46,7 +46,6 @@ export default function ProfilePage() {
         weeklyDigest: true
     })
 
-    // ✅ No conflict now - this creates a local user object for display
     const currentUser = {
         name: userData.name,
         email: userData.email,
