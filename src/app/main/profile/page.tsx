@@ -1,24 +1,77 @@
 'use client'
-import { useState } from 'react'
+import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { User, Building2, Mail, Phone, MapPin, Calendar, Edit3, Save, X, Camera, Shield, Bell, Globe } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 export default function ProfilePage() {
-    const { user: authUser } = useAuth() // ✅ Renamed to avoid conflict
+    const { user: authUser } = useAuth()
     const [isEditing, setIsEditing] = useState(false)
     const [activeTab, setActiveTab] = useState<'profile' | 'clinic' | 'security' | 'notifications'>('profile')
+    const [loading, setLoading] = useState(true)
 
-    // Initialize userData based on auth user or mock data
     const [userData, setUserData] = useState({
-        name: authUser?.name || 'Dr. Sarah Johnson',
-        email: authUser?.email || 'sarah@smithclinic.com',
+        name: 'Dr. Sarah Johnson',
+        email: 'sarah@smithclinic.com',
         phone: '+1 (555) 123-4567',
         specialization: 'General Practitioner',
-        role: authUser?.role || 'Lab Technician',
+        role: 'Lab Technician',
         joinDate: '2023-01-15',
         profileImage: '/api/placeholder/150/150'
     })
+
+    useEffect(() => {
+        const fetchUserProfile = async () => {
+            try {
+                setLoading(true)
+                const response = await apiClient.get('/profile')
+                if (response.success && response.data && response.data.user) {
+                    const user = response.data.user
+
+                    setUserData({
+                        name: user.name || 'Dr. Sarah Johnson',
+                        email: user.email || 'sarah@smithclinic.com',
+                        phone: user.phone_number || '+1 (555) 123-4567',
+                        specialization: user.specialization || 'General Practitioner',
+                        role: user.role || 'Lab Technician',
+                        joinDate: user.created_at || '2023-01-15',
+                        profileImage: response.data.profile_picture_url || '/api/placeholder/150/150'
+                    })
+                } else {
+                    setUserData({
+                        name: authUser?.name || 'Dr. Sarah Johnson',
+                        email: authUser?.email || 'sarah@smithclinic.com',
+                        phone: authUser?.phone_number || '+1 (555) 123-4567',
+                        specialization: authUser?.specialization || 'General Practitioner',
+                        role: authUser?.role || 'Lab Technician',
+                        joinDate: authUser?.created_at || '2023-01-15',
+                        profileImage: authUser?.profile_picture_url || '/api/placeholder/150/150'
+                    })
+                }
+            } catch (error) {
+                console.error('Failed to fetch user profile:', error)
+                setUserData({
+                    name: authUser?.name || 'Dr. Sarah Johnson',
+                    email: authUser?.email || 'sarah@smithclinic.com',
+                    phone: authUser?.phone_number || '+1 (555) 123-4567',
+                    specialization: authUser?.specialization || 'General Practitioner',
+                    role: authUser?.role || 'Lab Technician',
+                    joinDate: authUser?.created_at || '2023-01-15',
+                    profileImage: authUser?.profile_picture_url || '/api/placeholder/150/150'
+                })
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        if (authUser) {
+            fetchUserProfile()
+        } else {
+            setLoading(false)
+        }
+    }, [authUser])
 
     const [clinicData, setClinicData] = useState({
         name: 'Smith Medical Clinic',
@@ -46,19 +99,76 @@ export default function ProfilePage() {
         weeklyDigest: true
     })
 
-    const currentUser = {
-        name: userData.name,
-        email: userData.email,
-        clinic: clinicData.name
+    const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
+    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (file) {
+            setSelectedFile(file)
+            const reader = new FileReader()
+            reader.onload = (e) => {
+                setUserData({ ...userData, profileImage: e.target?.result as string })
+            }
+            reader.readAsDataURL(file)
+        }
     }
 
-    const handleSave = () => {
-        setIsEditing(false)
-        console.log('Profile updated')
+    const handleSave = async () => {
+        try {
+            setLoading(true)
+            const formData = new FormData()
+            formData.append('name', userData.name)
+            formData.append('email', userData.email)
+            formData.append('phone_number', userData.phone)
+            formData.append('specialization', userData.specialization)
+            
+            if (selectedFile) {
+                formData.append('profile_pic', selectedFile)
+            }
+
+            const response = await apiClient.request('/profile/update', {
+                method: 'POST',
+                body: formData,
+            })
+
+            if (response.success) {
+                setIsEditing(false)
+                setSelectedFile(null)
+                
+                if (response.data && response.data.user) {
+                    const updatedUser = response.data.user
+                    setUserData({
+                        name: updatedUser.name || userData.name,
+                        email: updatedUser.email || userData.email,
+                        phone: updatedUser.phone_number || userData.phone,
+                        specialization: updatedUser.specialization || userData.specialization,
+                        role: updatedUser.role || userData.role,
+                        joinDate: updatedUser.created_at || userData.joinDate,
+                        profileImage: response.data.profile_picture_url || userData.profileImage
+                    })
+                }
+                
+                console.log('Profile updated successfully')
+            }
+        } catch (error) {
+            console.error('Failed to update profile:', error)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleCancel = () => {
         setIsEditing(false)
+    }
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center min-h-96">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </DashboardLayout>
+        )
     }
 
     return (
@@ -89,9 +199,14 @@ export default function ProfilePage() {
                             </button>
                             <button
                                 onClick={handleSave}
-                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                disabled={loading}
+                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                             >
-                                <Save className="h-4 w-4 mr-2" />
+                                {loading ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                ) : (
+                                    <Save className="h-4 w-4 mr-2" />
+                                )}
                                 Save Changes
                             </button>
                         </div>
@@ -138,9 +253,21 @@ export default function ProfilePage() {
                                             alt="Profile"
                                         />
                                         {isEditing && (
-                                            <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700">
-                                                <Camera className="h-4 w-4" />
-                                            </button>
+                                            <>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleFileSelect}
+                                                    className="hidden"
+                                                    id="profile-upload"
+                                                />
+                                                <label
+                                                    htmlFor="profile-upload"
+                                                    className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 cursor-pointer"
+                                                >
+                                                    <Camera className="h-4 w-4" />
+                                                </label>
+                                            </>
                                         )}
                                     </div>
                                     <div>
@@ -262,6 +389,27 @@ export default function ProfilePage() {
                                 </div>
 
                                 <div className="space-y-4">
+                                    {/* Change Password Option */}
+                                    <div className="border-b border-gray-200 pb-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-900">
+                                                    Password
+                                                </label>
+                                                <p className="text-sm text-gray-500">
+                                                    Update your password to keep your account secure
+                                                </p>
+                                            </div>
+                                            <Link
+                                                href="/auth/reset-password"
+                                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            >
+                                                Change Password
+                                            </Link>
+                                        </div>
+                                    </div>
+
+                                    {/* Existing security settings */}
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <label className="text-sm font-medium text-gray-900">

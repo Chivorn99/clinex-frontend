@@ -3,11 +3,15 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
-  const isPublicPath = path === '/auth/login' || path === '/auth/signup' || path === '/'
+  const isPublicPath = path === '/auth/login' ||
+    path === '/auth/signup' ||
+    path === '/auth/reset-password' ||    
+    path === '/auth/verify-otp' ||      
+    path === '/auth/new-password' ||      
+    path === '/'
   const token = request.cookies.get('auth_token')?.value || ''
   const userRole = request.cookies.get('user_role')?.value || ''
 
-  // Current logic (working)
   if (isPublicPath && token) {
     return NextResponse.redirect(new URL('/main/homepage', request.nextUrl))
   }

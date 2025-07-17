@@ -7,6 +7,11 @@ interface User {
   name: string
   email: string
   role: string
+  phone_number?: string
+  specialization?: string
+  created_at?: string
+  profile_pic?: string
+  profile_picture_url?: string
 }
 
 interface AuthContextType {
