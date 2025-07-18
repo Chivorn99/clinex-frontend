@@ -1,11 +1,24 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { ArrowLeft, FileText, User, Calendar, Clock, Phone, Plus, Trash2, Edit, Save, X, Eye, CheckCircle, AlertTriangle, Maximize, Minimize, Clock as ClockIcon, RefreshCw } from 'lucide-react'
+import {
+    ArrowLeft,
+    FileText,
+    User,
+    Eye,
+    Maximize,
+    Minimize,
+    CheckCircle,
+    Clock as ClockIcon,
+    Plus,
+    Trash2,
+    AlertTriangle
+} from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { apiClient } from '@/lib/api'
 
+// Interfaces
 interface PatientInfo {
     name: string
     patientId: string
@@ -30,25 +43,21 @@ interface TestResult {
     result: string
     unit: string
     referenceRange: string
-    flag: 'normal' | 'high' | 'low' | 'critical' | null
+    flag: 'high' | 'low' | 'critical' | 'normal' | null
 }
 
 interface ProcessedReport {
     id: string
     fileName: string
-    status: 'processing' | 'completed' | 'verified'
+    status: 'processing' | 'completed' | 'verified' | 'error'
+    processingProgress: number
+    pdfUrl: string
     patientInfo: PatientInfo
     labInfo: LabInfo
     testResults: TestResult[]
-    pdfUrl: string
-    processingProgress: number
     extracted_data?: any
     original_filename?: string
-    uploader?: {
-        id: number
-        name: string
-        email: string
-    }
+    uploader?: any
 }
 
 interface BatchInfo {
@@ -57,27 +66,13 @@ interface BatchInfo {
     status: string
 }
 
-interface BatchVerificationResponse {
-    success: boolean
-    data: {
-        batch: BatchInfo
-        reports_to_verify: {
-            data: any[]
-            total: number
-            current_page: number
-            last_page: number
-        }
-        total_pending_verification: number
-    }
-    message: string
-}
-
 export default function VerificationPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const batchId = searchParams.get('batch')
+    const batchId = searchParams.get('batchId')
+    const reportId = searchParams.get('reportId')
     const { user } = useAuth()
-    
+
     const [isProcessing, setIsProcessing] = useState(true)
     const [reports, setReports] = useState<ProcessedReport[]>([])
     const [selectedReport, setSelectedReport] = useState<ProcessedReport | null>(null)
@@ -106,265 +101,213 @@ export default function VerificationPage() {
         clinic: 'Smith Medical Clinic'
     } : mockUser
 
+    // Group test results by category - use useMemo to avoid recalculation
+    const groupedTestResults = useMemo(() => {
+        if (!selectedReport) return {}
+
+        return selectedReport.testResults.reduce((acc, test) => {
+            const category = test.category || 'UNCATEGORIZED'
+            if (!acc[category]) {
+                acc[category] = []
+            }
+            acc[category].push(test)
+            return acc
+        }, {} as Record<string, TestResult[]>)
+    }, [selectedReport])
+
     useEffect(() => {
-        if (batchId) {
+        if (reportId) {
+            // Single report verification mode
+            fetchSingleReport(reportId)
+        } else if (batchId) {
+            // Batch verification mode
             fetchBatchReports()
         } else {
-            // If no batch ID, show all reports (existing behavior)
+            // Fallback to mock data
             fetchAllReports()
         }
-    }, [batchId])
+    }, [batchId, reportId])
 
-    const fetchBatchReports = async () => {
+    const fetchSingleReport = async (id: string) => {
         try {
             setIsProcessing(true)
-            setError('') // Clear any previous errors
-            
-            console.log('🚀 Fetching reports for batch:', batchId)
-            
-            const response = await apiClient.get(`/batches/${batchId}/reports-for-verification`)
-            console.log('✅ Full API Response received:', response)
-            console.log('📊 Response status:', response.status)
-            console.log('📦 Response data:', response.data)
-            console.log('🔍 Response data type:', typeof response.data)
-            console.log('🗝️ Response data keys:', Object.keys(response.data || {}))
-            
-            // The response.data contains the actual API response directly
-            const apiResponse = response.data
-            
-            // Check if response has the expected structure
-            if (!apiResponse) {
-                throw new Error('No data received from API')
-            }
-            
-            // Check if it has the expected batch structure
-            const hasBatch = 'batch' in apiResponse
-            const hasReportsToVerify = 'reports_to_verify' in apiResponse
-            const hasReportsArray = apiResponse.reports_to_verify?.data && Array.isArray(apiResponse.reports_to_verify.data)
-            
-            console.log('🔧 Structure check:', {
-                hasBatch,
-                hasReportsToVerify,
-                hasReportsArray,
-                batchInfo: apiResponse.batch,
-                reportsCount: hasReportsArray ? apiResponse.reports_to_verify.data.length : 'N/A'
-            })
-            
-            if (!hasBatch || !hasReportsToVerify) {
-                throw new Error('Invalid API response structure - missing batch or reports_to_verify')
-            }
-            
-            console.log('🎉 Processing successful response')
-            
-            // Extract batch info
-            if (apiResponse.batch) {
-                setBatchInfo(apiResponse.batch)
-                console.log('📋 Batch info set:', apiResponse.batch)
-            } else {
-                console.warn('⚠️ No batch info found in response')
-                // Create a fallback batch info
-                setBatchInfo({
-                    id: parseInt(batchId || '0'),
-                    name: `Batch ${batchId}`,
-                    status: 'completed'
-                })
-            }
-            
-            // Extract reports data
-            let reportsData: any[] = []
-            
-            if (hasReportsArray) {
-                reportsData = apiResponse.reports_to_verify.data
-                console.log('📊 Found reports in reports_to_verify.data:', reportsData.length)
-                console.log('📋 First report sample:', reportsData[0] ? {
-                    id: reportsData[0].id,
-                    filename: reportsData[0].original_filename,
-                    hasExtractedData: !!reportsData[0].extracted_data,
-                    testResultsCount: reportsData[0].extracted_data?.testResults?.length || 0
-                } : 'No reports')
-            } else {
-                console.warn('⚠️ reports_to_verify.data is not an array or missing')
-                console.log('🔍 Available in reports_to_verify:', Object.keys(apiResponse.reports_to_verify || {}))
-            }
-            
-            console.log('🔄 Starting transformation of', reportsData.length, 'reports')
-            
-            // Transform the reports data
-            const transformedReports = reportsData.map((report: any, index: number) => {
-                console.log(`🔄 Processing report ${index + 1}/${reportsData.length}:`, report.id, report.original_filename)
-                
-                const extractedData = report.extracted_data || {}
-                console.log(`📊 Extracted data for report ${report.id}:`, {
-                    hasPatientInfo: !!extractedData.patientInfo,
-                    hasLabInfo: !!extractedData.labInfo,
-                    testResultsCount: extractedData.testResults?.length || 0,
-                    patientName: extractedData.patientInfo?.name,
-                    labId: extractedData.labInfo?.labId
-                })
-                
-                const transformed = {
-                    id: report.id.toString(),
-                    fileName: report.original_filename || report.filename || `Report ${report.id}`,
-                    status: 'completed' as const,
-                    processingProgress: 100,
-                    pdfUrl: `/api/placeholder/400/600`, // You might want to use actual PDF URL from report.storage_path
-                    patientInfo: {
-                        name: extractedData.patientInfo?.name || '',
-                        patientId: extractedData.patientInfo?.patientId || '',
-                        age: extractedData.patientInfo?.age || '',
-                        gender: extractedData.patientInfo?.gender || '',
-                        phone: extractedData.patientInfo?.phone || ''
-                    },
-                    labInfo: {
-                        labId: extractedData.labInfo?.labId || '',
-                        requestedBy: extractedData.labInfo?.requestedBy || '',
-                        requestedDate: extractedData.labInfo?.requestedDate || '',
-                        collectedDate: extractedData.labInfo?.collectedDate || '',
-                        analysisDate: extractedData.labInfo?.analysisDate || '',
-                        validatedBy: extractedData.labInfo?.validatedBy || ''
-                    },
-                    testResults: (extractedData.testResults || []).map((test: any, testIndex: number) => ({
-                        id: `${report.id}_${testIndex}`,
-                        category: test.category || '',
-                        testName: test.testName || '',
-                        result: test.result || '',
-                        unit: test.unit || '',
-                        referenceRange: test.referenceRange || '',
-                        flag: test.flag === 'H' ? 'high' : test.flag === 'L' ? 'low' : test.flag === 'C' ? 'critical' : 'normal'
-                    })),
-                    extracted_data: extractedData,
-                    original_filename: report.original_filename,
-                    uploader: report.uploader
-                }
-                
-                console.log(`✅ Transformed report ${report.id}:`, {
-                    id: transformed.id,
-                    fileName: transformed.fileName,
-                    testResultsCount: transformed.testResults.length,
-                    patientName: transformed.patientInfo.name,
-                    labId: transformed.labInfo.labId
-                })
-                
-                return transformed
-            })
-            
-            console.log('🎊 All reports transformed successfully:', transformedReports.length)
-            console.log('📋 Transformed reports summary:', transformedReports.map(r => ({
-                id: r.id,
-                fileName: r.fileName,
-                testCount: r.testResults.length
-            })))
-            
-            setReports(transformedReports)
-            
-            // Select first report automatically
-            if (transformedReports.length > 0) {
-                setSelectedReport(transformedReports[0])
-                console.log('👆 Selected first report:', transformedReports[0].id, transformedReports[0].fileName)
-            } else {
-                console.log('ℹ️ No reports to select')
-            }
-            
             setError('')
-            console.log('✅ Successfully processed batch reports')
-            
-        } catch (err: any) {
-            console.error('💥 Failed to fetch batch reports - Full error:', err)
-            console.error('📝 Error message:', err.message)
-            console.error('🌐 Error response:', err.response)
-            console.error('📦 Error response data:', err.response?.data)
-            console.error('🔢 Error response status:', err.response?.status)
-            console.error('📋 Error response headers:', err.response?.headers)
-            
-            // Set a more specific error message
-            let errorMessage = 'Failed to load batch reports'
-            
-            if (err.response?.status === 404) {
-                errorMessage = `Batch ${batchId} not found or has no reports ready for verification`
-            } else if (err.response?.status === 401) {
-                errorMessage = 'Authentication failed. Please log in again.'
-            } else if (err.response?.status === 403) {
-                errorMessage = 'You do not have permission to access this batch'
-            } else if (err.response?.data?.message) {
-                errorMessage = err.response.data.message
-            } else if (err.message) {
-                errorMessage = err.message
+
+            console.log('🚀 Fetching single report:', id)
+
+            const response = await apiClient.get(`/lab-reports/${id}`)
+            console.log('✅ Single report API Response:', response)
+
+            if (response.success && response.data?.lab_report) {
+                const labReport = response.data.lab_report
+                const extractedData = response.data.extracted_data
+
+                console.log('📊 Lab Report Data:', labReport)
+                console.log('📋 Extracted Data:', extractedData)
+
+                // Transform single report to our format
+                const transformedReport = transformLabReportToProcessedReport(labReport, extractedData)
+
+                setReports([transformedReport])
+                setSelectedReport(transformedReport)
+
+                // Set batch info if available
+                if (labReport.batch) {
+                    setBatchInfo({
+                        id: labReport.batch.id,
+                        name: labReport.batch.name,
+                        status: labReport.batch.status
+                    })
+                }
+
+                console.log('✅ Single report loaded successfully')
+            } else {
+                throw new Error('Invalid response structure')
             }
-            
-            setError(errorMessage)
+
+        } catch (err: any) {
+            console.error('💥 Failed to fetch single report:', err)
+            handleFetchError(err, `report ${id}`)
         } finally {
             setIsProcessing(false)
             setProcessingAnimation(false)
         }
     }
 
-    const fetchAllReports = () => {
-        // Existing mock data logic for when no batch is specified
-        const mockReports: ProcessedReport[] = [
-            {
-                id: 'rpt_001',
-                fileName: 'lab_report_john_doe.pdf',
-                status: 'completed',
-                processingProgress: 100,
-                pdfUrl: '/api/placeholder/400/600',
-                patientInfo: {
-                    name: "សាន សេងយាន",
-                    patientId: "PT001871",
-                    age: "72 Y",
-                    gender: "Female",
-                    phone: "069366717"
-                },
-                labInfo: {
-                    labId: "LT001235",
-                    requestedBy: "Dr. CHHORN Sophy",
-                    requestedDate: "17/03/2024 12:57",
-                    collectedDate: "17/03/2024 13:36",
-                    analysisDate: "17/03/2024 13:36",
-                    validatedBy: "SREYNEANG - B.Sc"
-                },
-                testResults: [
-                    {
-                        id: '1',
-                        category: "BIOCHEMISTRY",
-                        testName: "Glucose",
-                        result: "6.5",
-                        unit: "mmol/L",
-                        referenceRange: "(3.9-6.1)",
-                        flag: "high"
-                    },
-                    {
-                        id: '2',
-                        category: "BIOCHEMISTRY",
-                        testName: "Creatinine",
-                        result: "85",
-                        unit: "umol/L",
-                        referenceRange: "(44-80)",
-                        flag: "high"
-                    },
-                    {
-                        id: '3',
-                        category: "HEMATOLOGY",
-                        testName: "Hemoglobin",
-                        result: "12.5",
-                        unit: "g/dL",
-                        referenceRange: "(12.0-15.5)",
-                        flag: "normal"
-                    }
-                ]
-            }
-        ]
+    const fetchBatchReports = async () => {
+        try {
+            setIsProcessing(true)
+            setError('')
 
-        setTimeout(() => {
-            setProcessingAnimation(false)
-            setReports(mockReports)
-            setIsProcessing(false)
-            const firstCompleted = mockReports.find(r => r.status === 'completed')
-            if (firstCompleted) {
-                setSelectedReport(firstCompleted)
+            console.log('🚀 Fetching reports for batch:', batchId)
+
+            const response = await apiClient.get(`/batches/${batchId}/reports-for-verification`)
+            console.log('✅ Batch reports API Response:', response)
+
+            const apiResponse = response.data
+
+            if (!apiResponse || !apiResponse.batch || !apiResponse.reports_to_verify?.data) {
+                throw new Error('Invalid API response structure')
             }
-        }, 3000)
+
+            // Set batch info
+            setBatchInfo(apiResponse.batch)
+
+            // Transform reports
+            const reportsData = apiResponse.reports_to_verify.data
+            const transformedReports = reportsData.map((report: any) =>
+                transformLabReportToProcessedReport(report, report.extracted_data)
+            )
+
+            setReports(transformedReports)
+
+            // Select first report or the one specified in URL
+            if (transformedReports.length > 0) {
+                const targetReport = reportId
+                    ? transformedReports.find((r: ProcessedReport) => r.id === reportId)
+                    : transformedReports[0]
+                setSelectedReport(targetReport || transformedReports[0])
+            }
+
+            console.log('✅ Batch reports loaded successfully')
+
+        } catch (err: any) {
+            console.error('💥 Failed to fetch batch reports:', err)
+            handleFetchError(err, `batch ${batchId}`)
+        } finally {
+            setIsProcessing(false)
+            setProcessingAnimation(false)
+        }
     }
 
+    const transformLabReportToProcessedReport = (labReport: any, extractedData: any): ProcessedReport => {
+        console.log('🔄 Transforming lab report:', labReport.id)
+
+        const transformed = {
+            id: labReport.id.toString(),
+            fileName: labReport.original_filename || `Report ${labReport.id}`,
+            status: labReport.status === 'verified' ? 'verified' as const : 'completed' as const,
+            processingProgress: 100,
+            // Use the actual backend route for PDF viewing
+            pdfUrl: `http://localhost:8000/api/lab-reports/${labReport.id}`,
+            patientInfo: {
+                name: extractedData?.patientInfo?.name || '',
+                patientId: extractedData?.patientInfo?.patientId || '',
+                age: extractedData?.patientInfo?.age || '',
+                gender: extractedData?.patientInfo?.gender || '',
+                phone: extractedData?.patientInfo?.phone || ''
+            },
+            labInfo: {
+                labId: extractedData?.labInfo?.labId || '',
+                requestedBy: extractedData?.labInfo?.requestedBy || '',
+                requestedDate: extractedData?.labInfo?.requestedDate || '',
+                collectedDate: extractedData?.labInfo?.collectedDate || '',
+                analysisDate: extractedData?.labInfo?.analysisDate || '',
+                validatedBy: extractedData?.labInfo?.validatedBy || ''
+            },
+            testResults: (extractedData?.testResults || []).map((test: any, index: number) => ({
+                id: `${labReport.id}_${index}`,
+                category: test.category || '',
+                testName: test.testName || '',
+                result: test.result || '',
+                unit: test.unit || '',
+                referenceRange: test.referenceRange || '',
+                // Map backend flags to frontend format
+                flag: mapBackendFlag(test.flag)
+            })),
+            extracted_data: extractedData,
+            original_filename: labReport.original_filename,
+            uploader: labReport.uploader
+        }
+
+        console.log('✅ Transformed report:', {
+            id: transformed.id,
+            fileName: transformed.fileName,
+            testResultsCount: transformed.testResults.length
+        })
+
+        return transformed
+    }
+
+    const mapBackendFlag = (flag: string | null): TestResult['flag'] => {
+        if (!flag) return null
+        switch (flag.toUpperCase()) {
+            case 'H': return 'high'
+            case 'L': return 'low'
+            case 'C': return 'critical'
+            default: return 'normal'
+        }
+    }
+
+    const mapFrontendFlag = (flag: TestResult['flag']): string | null => {
+        if (!flag || flag === 'normal') return null
+        switch (flag) {
+            case 'high': return 'H'
+            case 'low': return 'L'
+            case 'critical': return 'C'
+            default: return null
+        }
+    }
+
+    const handleFetchError = (err: any, context: string) => {
+        let errorMessage = `Failed to load ${context}`
+
+        if (err.response?.status === 404) {
+            errorMessage = `${context} not found or has no reports ready for verification`
+        } else if (err.response?.status === 401) {
+            errorMessage = 'Authentication failed. Please log in again.'
+        } else if (err.response?.status === 403) {
+            errorMessage = 'You do not have permission to access this resource'
+        } else if (err.response?.data?.message) {
+            errorMessage = err.response.data.message
+        } else if (err.message) {
+            errorMessage = err.message
+        }
+
+        setError(errorMessage)
+    }
+
+    // Helper functions for updating data
     const updatePatientInfo = (field: keyof PatientInfo, value: string) => {
         if (!selectedReport) return
 
@@ -409,11 +352,39 @@ export default function VerificationPage() {
         setReports(prev => prev.map(r => r.id === selectedReport.id ? updatedReport : r))
     }
 
+    const addNewCategory = () => {
+        setShowCategoryModal(true)
+    }
+
+    const handleCategorySubmit = () => {
+        if (!newCategoryName.trim() || !selectedReport) return
+
+        const newTest: TestResult = {
+            id: `test_${Date.now()}`,
+            category: newCategoryName.toUpperCase(),
+            testName: '',
+            result: '',
+            unit: '',
+            referenceRange: '',
+            flag: null
+        }
+
+        const updatedReport = {
+            ...selectedReport,
+            testResults: [...selectedReport.testResults, newTest]
+        }
+
+        setSelectedReport(updatedReport)
+        setReports(prev => prev.map(r => r.id === selectedReport.id ? updatedReport : r))
+        setNewCategoryName('')
+        setShowCategoryModal(false)
+    }
+
     const addTestResult = (category: string) => {
         if (!selectedReport) return
 
         const newTest: TestResult = {
-            id: Date.now().toString(),
+            id: `test_${Date.now()}`,
             category,
             testName: '',
             result: '',
@@ -443,16 +414,119 @@ export default function VerificationPage() {
         setReports(prev => prev.map(r => r.id === selectedReport.id ? updatedReport : r))
     }
 
-    const addNewCategory = () => {
-        setShowCategoryModal(true)
-        setNewCategoryName('')
-    }
+    const handleSubmitVerification = async () => {
+        if (!selectedReport) return
 
-    const handleCategorySubmit = () => {
-        if (newCategoryName.trim() && selectedReport) {
-            addTestResult(newCategoryName.trim().toUpperCase())
-            setShowCategoryModal(false)
-            setNewCategoryName('')
+        setIsSubmitting(true)
+
+        try {
+            console.log('🚀 Starting verification submission for report:', selectedReport.id)
+
+            // Prepare the verified data in the format expected by the API
+            const verifiedData = {
+                verified_data: {
+                    patientInfo: {
+                        name: selectedReport.patientInfo.name,
+                        patientId: selectedReport.patientInfo.patientId,
+                        age: selectedReport.patientInfo.age,
+                        gender: selectedReport.patientInfo.gender,
+                        phone: selectedReport.patientInfo.phone
+                    },
+                    labInfo: {
+                        labId: selectedReport.labInfo.labId,
+                        requestedBy: selectedReport.labInfo.requestedBy,
+                        requestedDate: selectedReport.labInfo.requestedDate,
+                        collectedDate: selectedReport.labInfo.collectedDate,
+                        analysisDate: selectedReport.labInfo.analysisDate,
+                        validatedBy: selectedReport.labInfo.validatedBy
+                    },
+                    testResults: selectedReport.testResults.map(test => ({
+                        category: test.category,
+                        testName: test.testName,
+                        result: test.result,
+                        unit: test.unit,
+                        referenceRange: test.referenceRange,
+                        flag: mapFrontendFlag(test.flag) // Convert to backend format (H, L, or null)
+                    }))
+                },
+                notes: `Verified by ${currentUser.name} on ${new Date().toLocaleDateString()}`
+            }
+
+            console.log('📦 Sending verification data:', verifiedData)
+
+            // Submit to API
+            const response = await apiClient.post(`/lab-reports/${selectedReport.id}/verify`, verifiedData)
+
+            console.log('✅ Verification API Response:', response)
+
+            if (response.success) {
+                console.log('🎉 Report verified successfully!')
+
+                // Update the local state to reflect the verification
+                const updatedReport = {
+                    ...selectedReport,
+                    status: 'verified' as const
+                }
+
+                setSelectedReport(updatedReport)
+                setReports(prev => prev.map(r => r.id === selectedReport.id ? updatedReport : r))
+
+                // Navigate based on context
+                if (batchId) {
+                    // Check if there are more reports to verify
+                    const remainingReports = reports.filter(r =>
+                        r.id !== selectedReport.id && r.status === 'completed'
+                    )
+
+                    if (remainingReports.length > 0) {
+                        // Auto-select next unverified report
+                        setSelectedReport(remainingReports[0])
+                        console.log('👆 Auto-selected next report for verification:', remainingReports[0].fileName)
+
+                        // Update URL to reflect the new report
+                        const newUrl = `/main/verification?batchId=${batchId}&reportId=${remainingReports[0].id}`
+                        window.history.replaceState(null, '', newUrl)
+                    } else {
+                        // All reports in batch are verified
+                        console.log('🏁 All reports in batch verified')
+                        router.push('/main/verification/monitoring')
+                    }
+                } else {
+                    // Single report verification - go back to reports list
+                    router.push('/main/reports?status=verified')
+                }
+
+            } else {
+                throw new Error(response.message || 'Verification failed')
+            }
+
+        } catch (err: any) {
+            console.error('💥 Verification submission failed:', err)
+
+            let errorMessage = 'Failed to verify report'
+
+            if (err.response?.status === 422) {
+                const validationErrors = err.response.data?.errors
+                if (validationErrors) {
+                    errorMessage = 'Validation failed: ' + Object.values(validationErrors).flat().join(', ')
+                } else {
+                    errorMessage = err.response.data?.message || 'Validation failed'
+                }
+            } else if (err.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (err.response?.status === 404) {
+                errorMessage = 'Report not found'
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            alert(`Verification Error: ${errorMessage}`)
+            setError(errorMessage)
+
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -461,121 +535,88 @@ export default function VerificationPage() {
 
         setIsSubmitting(true)
 
-        // TODO: Save as unverified
-        setTimeout(() => {
-            console.log('Saving for later verification:', selectedReport)
-            setIsSubmitting(false)
+        try {
+            console.log('💾 Saving report for later verification:', selectedReport.id)
+
+            // Navigate back based on context
             if (batchId) {
-                router.push('/main/reports')
+                router.push('/main/verification/monitoring')
             } else {
-                router.push('/main/reports?status=unverified')
+                router.push('/main/reports?status=processed')
             }
-        }, 1000)
-    }
 
-    const handleSubmitVerification = async () => {
-        if (!selectedReport) return
-
-        setIsSubmitting(true)
-
-        // TODO: Submit verified data to API
-        setTimeout(() => {
-            console.log('Submitting verified data:', selectedReport)
+        } catch (err: any) {
+            console.error('💥 Failed to save for later:', err)
+            alert('Failed to save report for later verification')
+        } finally {
             setIsSubmitting(false)
-            if (batchId) {
-                router.push('/main/main/reports')
-            } else {
-                router.push('/main/reports?status=verified')
-            }
-        }, 1000)
-    }
-
-    const getFlagColor = (flag: TestResult['flag']) => {
-        switch (flag) {
-            case 'high': case 'critical': return 'bg-red-100 text-red-800'
-            case 'low': return 'bg-yellow-100 text-yellow-800'
-            case 'normal': return 'bg-green-100 text-green-800'
-            default: return 'bg-gray-100 text-gray-800'
         }
     }
 
-    // Group test results by category
-    const groupedTestResults = selectedReport?.testResults.reduce((acc, test) => {
-        if (!acc[test.category]) {
-            acc[test.category] = []
-        }
-        acc[test.category].push(test)
-        return acc
-    }, {} as Record<string, TestResult[]>) || {}
+    // Update the flag field in test results to use the correct options
+    const renderFlagDropdown = (test: TestResult) => (
+        <select
+            value={test.flag || ''}
+            onChange={(e) => {
+                const value = e.target.value === '' ? null : e.target.value;
+                updateTestResult(test.id, 'flag', value as TestResult['flag']);
+            }}
+            className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+        >
+            <option value="">Normal</option>
+            <option value="H">High (H)</option>
+            <option value="L">Low (L)</option>
+        </select>
+    )
 
-    if (processingAnimation || isProcessing) {
-        return (
-            <DashboardLayout>
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="relative">
-                            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-                            <FileText className="h-8 w-8 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                        </div>
-                        <h2 className="mt-6 text-2xl font-bold text-gray-900">Loading Reports</h2>
-                        <p className="mt-2 text-gray-600">
-                            {batchId ? `Loading reports from ${batchInfo?.name || `Batch ${batchId}`}...` : 'Extracting data from your PDF reports...'}
-                        </p>
-                        <div className="mt-6 w-64 mx-auto">
-                            <div className="flex justify-between text-sm text-gray-500 mb-2">
-                                <span>Progress</span>
-                                <span>Loading...</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </DashboardLayout>
-        )
-    }
+    // Update the existing fetchAllReports function
+    const fetchAllReports = () => {
+        // Existing mock data logic for when no batch or report is specified
+        const mockReports: ProcessedReport[] = [
+            {
+                id: 'rpt_001',
+                fileName: 'lab_report_john_doe.pdf',
+                status: 'completed',
+                processingProgress: 100,
+                pdfUrl: 'http://localhost:8000/api/lab-reports/1', // Use actual backend route
+                patientInfo: {
+                    name: "សាន សេងយាន",
+                    patientId: "PT001871",
+                    age: "72 Y",
+                    gender: "Female",
+                    phone: "069366717"
+                },
+                labInfo: {
+                    labId: "LT001235",
+                    requestedBy: "Dr. CHHORN Sophy",
+                    requestedDate: "17/03/2024 12:57",
+                    collectedDate: "17/03/2024 13:36",
+                    analysisDate: "17/03/2024 13:36",
+                    validatedBy: "SREYNEANG - B.Sc"
+                },
+                testResults: [
+                    {
+                        id: '1',
+                        category: "BIOCHEMISTRY",
+                        testName: "Glucose",
+                        result: "6.5",
+                        unit: "mmol/L",
+                        referenceRange: "(3.9-6.1)",
+                        flag: "high"
+                    }
+                ]
+            }
+        ]
 
-    // Add retry function
-    const retryFetchBatchReports = () => {
-        setError('')
-        fetchBatchReports()
-    }
-
-    // Update the error display section
-    if (error) {
-        return (
-            <DashboardLayout>
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="text-center max-w-md">
-                        <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Reports</h2>
-                        <p className="text-gray-600 mb-6">{error}</p>
-                        <div className="space-y-3">
-                            <button
-                                onClick={retryFetchBatchReports}
-                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-3"
-                            >
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Retry
-                            </button>
-                            <button
-                                onClick={() => router.push('/main/verification/monitoring')}
-                                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                            >
-                                <ArrowLeft className="h-4 w-4 mr-2" />
-                                Back to Monitoring
-                            </button>
-                        </div>
-                        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-left">
-                            <p className="text-sm text-gray-700 font-medium mb-2">Debug Info:</p>
-                            <p className="text-xs text-gray-600">Batch ID: {batchId}</p>
-                            <p className="text-xs text-gray-600">Endpoint: /batches/{batchId}/reports-for-verification</p>
-                        </div>
-                    </div>
-                </div>
-            </DashboardLayout>
-        )
+        setTimeout(() => {
+            setProcessingAnimation(false)
+            setReports(mockReports)
+            setIsProcessing(false)
+            const firstCompleted = mockReports.find(r => r.status === 'completed')
+            if (firstCompleted) {
+                setSelectedReport(firstCompleted)
+            }
+        }, 3000)
     }
 
     return (
@@ -585,20 +626,30 @@ export default function VerificationPage() {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                         <button
-                            onClick={() => router.push('/main/verification/monitoring')}
+                            onClick={() => {
+                                if (reportId && !batchId) {
+                                    // Single report mode - go back to reports list
+                                    router.push('/main/reports')
+                                } else {
+                                    // Batch mode - go back to monitoring
+                                    router.push('/main/verification/monitoring')
+                                }
+                            }}
                             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
                             <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back to Monitoring
+                            {reportId && !batchId ? 'Back to Reports' : 'Back to Monitoring'}
                         </button>
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">
                                 {batchId ? `Batch Verification - ${batchInfo?.name || `Batch ${batchId}`}` : 'Data Verification'}
                             </h1>
                             <p className="mt-1 text-gray-600">
-                                {batchId 
+                                {batchId
                                     ? `Review and verify ${reports.length} reports from this batch`
-                                    : 'Review and verify extracted data before submission'
+                                    : reportId
+                                        ? 'Review and verify this report'
+                                        : 'Review and verify extracted data before submission'
                                 }
                             </p>
                         </div>
@@ -655,11 +706,10 @@ export default function VerificationPage() {
                                 </p>
                             </div>
                             <div className="flex-shrink-0">
-                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                                    batchInfo.status === 'completed' 
-                                        ? 'bg-green-100 text-green-800' 
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${batchInfo.status === 'completed'
+                                        ? 'bg-green-100 text-green-800'
                                         : 'bg-yellow-100 text-yellow-800'
-                                }`}>
+                                    }`}>
                                     {batchInfo.status}
                                 </span>
                             </div>
@@ -681,10 +731,10 @@ export default function VerificationPage() {
                                         key={report.id}
                                         onClick={() => report.status === 'completed' && setSelectedReport(report)}
                                         className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedReport?.id === report.id
-                                                ? 'border-blue-300 bg-blue-50'
-                                                : report.status === 'completed'
-                                                    ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                                    : 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                                            ? 'border-blue-300 bg-blue-50'
+                                            : report.status === 'completed'
+                                                ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                                : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                                             }`}
                                     >
                                         <div className="flex items-center space-x-2">
@@ -695,10 +745,10 @@ export default function VerificationPage() {
                                         </div>
                                         <div className="mt-2 flex items-center justify-between">
                                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${report.status === 'completed'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : report.status === 'processing'
-                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                        : 'bg-gray-100 text-gray-800'
+                                                ? 'bg-green-100 text-green-800'
+                                                : report.status === 'processing'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {report.status}
                                             </span>
@@ -863,20 +913,7 @@ export default function VerificationPage() {
                                                                     />
                                                                 </td>
                                                                 <td className="px-4 py-3">
-                                                                    <select
-                                                                        value={test.flag || ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value === '' ? null : e.target.value;
-                                                                            updateTestResult(test.id, 'flag', value as TestResult['flag']);
-                                                                        }}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                                                                    >
-                                                                        <option value="">Select flag</option>
-                                                                        <option value="normal">Normal</option>
-                                                                        <option value="high">High</option>
-                                                                        <option value="low">Low</option>
-                                                                        <option value="critical">Critical</option>
-                                                                    </select>
+                                                                    {renderFlagDropdown(test)}
                                                                 </td>
                                                                 <td className="px-4 py-3">
                                                                     <button
@@ -994,36 +1031,28 @@ export default function VerificationPage() {
                                     <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
                                         <Plus className="h-6 w-6 text-blue-600" aria-hidden="true" />
                                     </div>
-                                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
+                                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                                         <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                                            Add New Test Category
+                                            Add New Category
                                         </h3>
                                         <div className="mt-2">
                                             <p className="text-sm text-gray-500">
-                                                Enter the name for the new test category. This will be displayed as a section header for grouping related tests.
+                                                Enter a name for the new test results category.
                                             </p>
                                         </div>
                                         <div className="mt-4">
-                                            <label htmlFor="category-name" className="block text-sm font-medium text-gray-700">
-                                                Category Name
-                                            </label>
                                             <input
                                                 type="text"
-                                                id="category-name"
                                                 value={newCategoryName}
                                                 onChange={(e) => setNewCategoryName(e.target.value)}
+                                                placeholder="Category name (e.g., BIOCHEMISTRY)"
+                                                className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                                 onKeyPress={(e) => {
                                                     if (e.key === 'Enter') {
                                                         handleCategorySubmit()
                                                     }
                                                 }}
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
-                                                placeholder="e.g., BLOOD CHEMISTRY, IMMUNOLOGY"
-                                                autoFocus
                                             />
-                                            <p className="mt-1 text-xs text-gray-500">
-                                                Examples: BIOCHEMISTRY, HEMATOLOGY, LIPID PROFILE, THYROID FUNCTION
-                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -1034,7 +1063,6 @@ export default function VerificationPage() {
                                         disabled={!newCategoryName.trim()}
                                         className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <Plus className="h-4 w-4 mr-2" />
                                         Add Category
                                     </button>
                                     <button

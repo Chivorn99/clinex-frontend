@@ -4,13 +4,14 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeft, FileText, User, Calendar, Clock, Phone, CheckCircle, AlertTriangle, Download, Edit, Maximize, Minimize } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 interface PatientInfo {
     name: string
     patientId: string
     age: string
     gender: string
-    phone: string
+    phone: string | null
 }
 
 interface LabInfo {
@@ -27,14 +28,25 @@ interface TestResult {
     testName: string
     result: string
     flag: string | null
-    unit: string
-    referenceRange: string
+    unit: string | null
+    referenceRange: string | null
 }
 
 interface ReportData {
     patientInfo: PatientInfo
     labInfo: LabInfo
     testResults: TestResult[]
+}
+
+interface ReportMetadata {
+    id: number
+    originalFilename: string
+    status: string
+    verifiedAt: string | null
+    verifiedBy: string | null
+    notes: string | null
+    batchName: string
+    uploaderName: string
 }
 
 export default function ReportDetailsPage() {
@@ -44,7 +56,9 @@ export default function ReportDetailsPage() {
     const { user } = useAuth()
     
     const [reportData, setReportData] = useState<ReportData | null>(null)
+    const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string>('')
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false)
 
     // Mock user data
@@ -61,82 +75,87 @@ export default function ReportDetailsPage() {
         clinic: 'Smith Medical Clinic'
     } : mockUser
 
-    // Mock extracted data - this would come from your API
-    const mockReportData: ReportData = {
-        patientInfo: {
-            name: "សាន សេងយាន",
-            patientId: "PT001871",
-            age: "72 Y",
-            gender: "Female",
-            phone: "069366717"
-        },
-        labInfo: {
-            labId: "LT001235",
-            requestedBy: "Dr. CHHORN Sophy",
-            requestedDate: "17/03/2024 12:57",
-            collectedDate: "17/03/2024 13:36",
-            analysisDate: "17/03/2024 13:36",
-            validatedBy: "SREYNEANG - B.Sc"
-        },
-        testResults: [
-            {
-                category: "BIOCHEMISTRY",
-                testName: "Glucose",
-                result: "6.5",
-                flag: null,
-                unit: "mmol/L",
-                referenceRange: "(3.9-6.1)"
-            },
-            {
-                category: "BIOCHEMISTRY",
-                testName: "Creatinine",
-                result: "85",
-                flag: "HIGH",
-                unit: "umol/L",
-                referenceRange: "(44-80)"
-            },
-            {
-                category: "BIOCHEMISTRY",
-                testName: "Urea",
-                result: "5.5",
-                flag: null,
-                unit: "mmol/L",
-                referenceRange: "(2.8-8.3)"
-            },
-            {
-                category: "HEMATOLOGY",
-                testName: "Hemoglobin",
-                result: "12.5",
-                flag: null,
-                unit: "g/dL",
-                referenceRange: "(12.0-15.5)"
-            },
-            {
-                category: "HEMATOLOGY",
-                testName: "White Blood Cells",
-                result: "8.2",
-                flag: null,
-                unit: "×10³/μL",
-                referenceRange: "(4.0-11.0)"
-            },
-            {
-                category: "LIPID PROFILE",
-                testName: "Total Cholesterol",
-                result: "5.8",
-                flag: "HIGH",
-                unit: "mmol/L",
-                referenceRange: "(<5.2)"
-            }
-        ]
-    }
-
     useEffect(() => {
-        // Simulate API call
-        setTimeout(() => {
-            setReportData(mockReportData)
-            setLoading(false)
-        }, 1000)
+        if (reportId) {
+            fetchReportDetails()
+        }
     }, [reportId])
+
+    const fetchReportDetails = async () => {
+        try {
+            setLoading(true)
+            setError('')
+            
+            console.log('🚀 Fetching report details for ID:', reportId)
+            const response = await apiClient.get(`/lab-reports/${reportId}`)
+            console.log('✅ API Response:', response)
+
+            if (response.success && response.data?.lab_report) {
+                const labReport = response.data.lab_report
+                const extractedData = response.data.extracted_data
+
+                // Transform the data to match our interface
+                const transformedReportData: ReportData = {
+                    patientInfo: {
+                        name: extractedData.patientInfo?.name || 'N/A',
+                        patientId: extractedData.patientInfo?.patientId || 'N/A',
+                        age: extractedData.patientInfo?.age || 'N/A',
+                        gender: extractedData.patientInfo?.gender || 'N/A',
+                        phone: extractedData.patientInfo?.phone || null
+                    },
+                    labInfo: {
+                        labId: extractedData.labInfo?.labId || 'N/A',
+                        requestedBy: extractedData.labInfo?.requestedBy || 'N/A',
+                        requestedDate: extractedData.labInfo?.requestedDate || 'N/A',
+                        collectedDate: extractedData.labInfo?.collectedDate || 'N/A',
+                        analysisDate: extractedData.labInfo?.analysisDate || 'N/A',
+                        validatedBy: extractedData.labInfo?.validatedBy || 'N/A'
+                    },
+                    testResults: extractedData.testResults || []
+                }
+
+                const transformedMetadata: ReportMetadata = {
+                    id: labReport.id,
+                    originalFilename: labReport.original_filename,
+                    status: labReport.status,
+                    verifiedAt: labReport.verified_at,
+                    verifiedBy: labReport.verifier?.name || null,
+                    notes: labReport.notes,
+                    batchName: labReport.batch?.name || 'Unknown Batch',
+                    uploaderName: labReport.uploader?.name || 'Unknown'
+                }
+
+                setReportData(transformedReportData)
+                setReportMetadata(transformedMetadata)
+                
+                console.log('✅ Data transformed successfully:', {
+                    patientName: transformedReportData.patientInfo.name,
+                    labId: transformedReportData.labInfo.labId,
+                    testResultsCount: transformedReportData.testResults.length
+                })
+            } else {
+                throw new Error('Invalid response structure')
+            }
+
+        } catch (err: any) {
+            console.error('💥 Failed to fetch report details:', err)
+            let errorMessage = 'Failed to load report details'
+            
+            if (err.response?.status === 404) {
+                errorMessage = 'Report not found'
+            } else if (err.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+            
+            setError(errorMessage)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     // Group test results by category
     const groupedResults = reportData?.testResults.reduce((acc, test) => {
@@ -147,8 +166,8 @@ export default function ReportDetailsPage() {
         return acc
     }, {} as Record<string, TestResult[]>)
 
-    const getTestResultFlag = (flag: string | null, result: string, referenceRange: string) => {
-        if (flag === "HIGH") {
+    const getTestResultFlag = (flag: string | null, result: string, referenceRange: string | null) => {
+        if (flag === "HIGH" || flag === "H") {
             return (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                     <AlertTriangle className="h-3 w-3 mr-1" />
@@ -156,11 +175,19 @@ export default function ReportDetailsPage() {
                 </span>
             )
         }
-        if (flag === "LOW") {
+        if (flag === "LOW" || flag === "L") {
             return (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                     <AlertTriangle className="h-3 w-3 mr-1" />
                     Low
+                </span>
+            )
+        }
+        if (flag === "CRITICAL" || flag === "C") {
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-200 text-red-900">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Critical
                 </span>
             )
         }
@@ -177,23 +204,58 @@ export default function ReportDetailsPage() {
             <DashboardLayout>
                 <div className="flex items-center justify-center min-h-96">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Loading report details...</span>
                 </div>
             </DashboardLayout>
         )
     }
 
-    if (!reportData) {
+    if (error) {
+        return (
+            <DashboardLayout>
+                <div className="text-center py-12">
+                    <div className="text-red-600 text-lg font-medium mb-4">{error}</div>
+                    <button
+                        onClick={() => router.back()}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Go Back
+                    </button>
+                </div>
+            </DashboardLayout>
+        )
+    }
+
+    if (!reportData || !reportMetadata) {
         return (
             <DashboardLayout>
                 <div className="text-center py-12">
                     <p className="text-gray-500">Report not found</p>
+                    <button
+                        onClick={() => router.back()}
+                        className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Go Back
+                    </button>
                 </div>
             </DashboardLayout>
         )
     }
 
-    // Mock PDF URL - this would come from your API
-    const pdfUrl = "/api/placeholder/400/600" // Replace with actual PDF URL
+    // Add handler for verify button
+    const handleVerifyReport = () => {
+        if (reportMetadata) {
+            // Navigate to verification page with the batch ID and auto-select this report
+            // You might need to extract batch ID from the metadata
+            const batchId = reportMetadata.batchName.match(/\d+/)?.[0] || reportMetadata.id
+            router.push(`/main/verification?batchId=${batchId}&reportId=${reportId}`)
+        }
+    }
+
+    // Mock PDF URL - you might want to get this from your API
+    const pdfUrl = "/api/placeholder/400/600" // Replace with actual PDF URL from storage_path
 
     return (
         <DashboardLayout>
@@ -210,14 +272,40 @@ export default function ReportDetailsPage() {
                         </button>
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900">Report Details</h1>
-                            <p className="mt-1 text-gray-600">Lab Report ID: {reportData.labInfo.labId}</p>
+                            <div className="mt-1 flex items-center space-x-4">
+                                <p className="text-gray-600">Lab Report ID: {reportData.labInfo.labId}</p>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    reportMetadata.status === 'verified' 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : (reportMetadata.status === 'processing' || reportMetadata.status === 'processed')
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                    {reportMetadata.status === 'processed' ? 'Needs Verification' : reportMetadata.status}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className="flex space-x-3">
-                        <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Data
-                        </button>
+                        {/* Show Verify button for processing OR processed status */}
+                        {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                            <button 
+                                onClick={handleVerifyReport}
+                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Verify Report
+                            </button>
+                        )}
+                        
+                        {/* Show Edit button only for verified reports or admins */}
+                        {(reportMetadata.status === 'verified' || currentUser.name.includes('Dr.')) && (
+                            <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Data
+                            </button>
+                        )}
+                        
                         <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                             <Download className="h-4 w-4 mr-2" />
                             Download PDF
@@ -225,10 +313,124 @@ export default function ReportDetailsPage() {
                     </div>
                 </div>
 
+                {/* Report Metadata - Enhanced for processing/processed status */}
+                <div className={`border rounded-lg p-4 ${
+                    (reportMetadata.status === 'processing' || reportMetadata.status === 'processed')
+                        ? 'bg-blue-50 border-blue-200' 
+                        : reportMetadata.status === 'verified'
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-yellow-50 border-yellow-200'
+                }`}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span className={`font-medium ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-900' :
+                                reportMetadata.status === 'verified' ? 'text-green-900' :
+                                'text-yellow-900'
+                            }`}>Batch:</span>
+                            <span className={`ml-2 ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-700' :
+                                reportMetadata.status === 'verified' ? 'text-green-700' :
+                                'text-yellow-700'
+                            }`}>{reportMetadata.batchName}</span>
+                        </div>
+                        <div>
+                            <span className={`font-medium ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-900' :
+                                reportMetadata.status === 'verified' ? 'text-green-900' :
+                                'text-yellow-900'
+                            }`}>Uploaded by:</span>
+                            <span className={`ml-2 ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-700' :
+                                reportMetadata.status === 'verified' ? 'text-green-700' :
+                                'text-yellow-700'
+                            }`}>{reportMetadata.uploaderName}</span>
+                        </div>
+                        {reportMetadata.verifiedBy && (
+                            <div>
+                                <span className={`font-medium ${
+                                    (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-900' :
+                                    reportMetadata.status === 'verified' ? 'text-green-900' :
+                                    'text-yellow-900'
+                                }`}>Verified by:</span>
+                                <span className={`ml-2 ${
+                                    (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-700' :
+                                    reportMetadata.status === 'verified' ? 'text-green-700' :
+                                    'text-yellow-700'
+                                }`}>{reportMetadata.verifiedBy}</span>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Special message for processing/processed status */}
+                    {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                        <div className="mt-2 pt-2 border-t border-blue-200">
+                            <div className="flex items-center">
+                                <Clock className="h-4 w-4 text-blue-600 mr-2" />
+                                <span className="font-medium text-blue-900">Status:</span>
+                                <span className="ml-2 text-blue-700">
+                                    This report has been processed and data extracted. Click "Verify Report" to review and approve the extracted data.
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {reportMetadata.notes && (
+                        <div className={`mt-2 pt-2 border-t ${
+                            (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'border-blue-200' :
+                            reportMetadata.status === 'verified' ? 'border-green-200' :
+                            'border-yellow-200'
+                        }`}>
+                            <span className={`font-medium ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-900' :
+                                reportMetadata.status === 'verified' ? 'text-green-900' :
+                                'text-yellow-900'
+                            }`}>Notes:</span>
+                            <p className={`mt-1 ${
+                                (reportMetadata.status === 'processing' || reportMetadata.status === 'processed') ? 'text-blue-700' :
+                                reportMetadata.status === 'verified' ? 'text-green-700' :
+                                'text-yellow-700'
+                            }`}>{reportMetadata.notes}</p>
+                        </div>
+                    )}
+                </div>
+
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                     {/* Left Column - Patient & Lab Info */}
                     <div className="xl:col-span-2 space-y-6">
+                        {/* Processing/Processed Status Alert */}
+                        {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <AlertTriangle className="h-5 w-5 text-blue-400" />
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-sm font-medium text-blue-800">
+                                            Verification Required
+                                        </h3>
+                                        <div className="mt-2 text-sm text-blue-700">
+                                            <p>
+                                                This report has been processed and the data has been extracted successfully. 
+                                                Please review the extracted information below and click "Verify Report" 
+                                                to complete the verification process.
+                                            </p>
+                                        </div>
+                                        <div className="mt-4">
+                                            <button
+                                                onClick={handleVerifyReport}
+                                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            >
+                                                <CheckCircle className="h-4 w-4 mr-2" />
+                                                Go to Verification Page
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Patient & Lab Information */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Patient Information Card */}
@@ -237,13 +439,18 @@ export default function ReportDetailsPage() {
                                     <h3 className="text-lg font-medium text-gray-900 flex items-center">
                                         <User className="h-5 w-5 mr-2 text-blue-600" />
                                         Patient Information
+                                        {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                Needs Review
+                                            </span>
+                                        )}
                                     </h3>
                                 </div>
                                 <div className="px-6 py-4 space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-500">Patient Name</label>
-                                            <p className="mt-1 text-sm text-gray-900">{reportData.patientInfo.name}</p>
+                                            <p className="mt-1 text-sm text-gray-900">{reportData.patientInfo.name || 'Not extracted'}</p>
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-500">Patient ID</label>
@@ -261,7 +468,7 @@ export default function ReportDetailsPage() {
                                             <label className="block text-sm font-medium text-gray-500">Phone Number</label>
                                             <p className="mt-1 text-sm text-gray-900 flex items-center">
                                                 <Phone className="h-4 w-4 mr-2 text-gray-400" />
-                                                {reportData.patientInfo.phone}
+                                                {reportData.patientInfo.phone || 'Not provided'}
                                             </p>
                                         </div>
                                     </div>
@@ -274,6 +481,11 @@ export default function ReportDetailsPage() {
                                     <h3 className="text-lg font-medium text-gray-900 flex items-center">
                                         <FileText className="h-5 w-5 mr-2 text-green-600" />
                                         Laboratory Information
+                                        {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                Needs Review
+                                            </span>
+                                        )}
                                     </h3>
                                 </div>
                                 <div className="px-6 py-4 space-y-4">
@@ -306,7 +518,7 @@ export default function ReportDetailsPage() {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-500">Validated By</label>
-                                            <p className="mt-1 text-sm text-gray-900">{reportData.labInfo.validatedBy}</p>
+                                            <p className="mt-1 text-sm text-gray-900">{reportData.labInfo.validatedBy || 'Not validated'}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -315,7 +527,15 @@ export default function ReportDetailsPage() {
 
                         {/* Test Results by Category */}
                         <div className="space-y-6">
-                            <h3 className="text-xl font-bold text-gray-900">Test Results</h3>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-bold text-gray-900">Test Results</h3>
+                                {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                        <AlertTriangle className="h-4 w-4 mr-2" />
+                                        Needs Verification
+                                    </span>
+                                )}
+                            </div>
                             
                             {groupedResults && Object.entries(groupedResults).map(([category, tests]) => (
                                 <div key={category} className="bg-white shadow rounded-lg">
@@ -356,10 +576,10 @@ export default function ReportDetailsPage() {
                                                             {test.result}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                            {test.unit}
+                                                            {test.unit || '-'}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                            {test.referenceRange}
+                                                            {test.referenceRange || '-'}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                             {getTestResultFlag(test.flag, test.result, test.referenceRange)}
@@ -371,6 +591,13 @@ export default function ReportDetailsPage() {
                                     </div>
                                 </div>
                             ))}
+
+                            {(!groupedResults || Object.keys(groupedResults).length === 0) && (
+                                <div className="bg-white shadow rounded-lg p-8 text-center">
+                                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-500">No test results found for this report</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -405,7 +632,7 @@ export default function ReportDetailsPage() {
                                     />
                                 </div>
                                 <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
-                                    <span>Page 1 of 2</span>
+                                    <span>Original: {reportMetadata.originalFilename}</span>
                                     <button
                                         onClick={() => window.open(pdfUrl, '_blank')}
                                         className="text-blue-600 hover:text-blue-800 font-medium"
@@ -415,27 +642,6 @@ export default function ReportDetailsPage() {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Quick Actions Card
-                        <div className="bg-white shadow rounded-lg mt-6">
-                            <div className="px-6 py-4 border-b border-gray-200">
-                                <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
-                            </div>
-                            <div className="p-4 space-y-3">
-                                <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Mark as Verified
-                                </button>
-                                <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit Extracted Data
-                                </button>
-                                <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Export to Excel
-                                </button>
-                            </div>
-                        </div> */}
                     </div>
                 </div>
             </div>
