@@ -1,9 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Search, Filter, Download, Eye, CheckCircle, XCircle, Clock, Calendar, FileText, Users, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 interface Report {
     id: string
@@ -17,6 +18,15 @@ interface Report {
     extractedData?: any
     verifiedBy?: string
     priority: 'low' | 'medium' | 'high'
+    original_filename?: string
+    uploader?: string
+    created_at?: string
+    updated_at?: string
+    verification_status?: string
+    batch?: {
+        id: number
+        name: string
+    }
 }
 
 interface Batch {
@@ -33,7 +43,11 @@ export default function ReportsPage() {
     const { user } = useAuth()
     const [activeTab, setActiveTab] = useState<'all' | 'verified' | 'unverified' | 'batches'>('all')
     const [searchQuery, setSearchQuery] = useState('')
-    const [filterType, setFilterType] = useState('all')
+    const [filterBatch, setFilterBatch] = useState('all') // Changed from filterType to filterBatch
+    const [reports, setReports] = useState<Report[]>([])
+    const [availableBatches, setAvailableBatches] = useState<{ id: string, name: string }[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
     const router = useRouter()
 
     // Fallback mock user data
@@ -50,96 +64,133 @@ export default function ReportsPage() {
         clinic: 'Smith Medical Clinic'
     } : mockUser
 
-    // Mock reports data
-    const reports: Report[] = [
-        {
-            id: 'rpt_001',
-            fileName: 'lab_report_john_doe.pdf',
-            patientName: 'John Doe',
-            reportType: 'Laboratory Report',
-            uploadDate: '2024-01-15T10:30:00Z',
-            processedDate: '2024-01-15T10:45:00Z',
-            status: 'verified',
-            batchId: 'batch_001',
-            verifiedBy: 'Dr. Smith',
-            priority: 'high'
-        },
-        {
-            id: 'rpt_002',
-            fileName: 'xray_chest_jane_smith.pdf',
-            patientName: 'Jane Smith',
-            reportType: 'X-Ray Report',
-            uploadDate: '2024-01-15T11:00:00Z',
-            processedDate: '2024-01-15T11:15:00Z',
-            status: 'unverified',
-            batchId: 'batch_001',
-            priority: 'medium'
-        },
-        {
-            id: 'rpt_003',
-            fileName: 'blood_test_mike_johnson.pdf',
-            patientName: 'Mike Johnson',
-            reportType: 'Blood Test Report',
-            uploadDate: '2024-01-15T12:00:00Z',
-            processedDate: '2024-01-15T12:10:00Z',
-            status: 'verified',
-            batchId: 'batch_002',
-            verifiedBy: 'Dr. Johnson',
-            priority: 'low'
-        },
-        {
-            id: 'rpt_004',
-            fileName: 'consultation_notes_alice_brown.pdf',
-            patientName: 'Alice Brown',
-            reportType: 'Consultation Notes',
-            uploadDate: '2024-01-16T09:30:00Z',
-            processedDate: '',
-            status: 'processing',
-            batchId: 'batch_003',
-            priority: 'high'
-        }
-    ]
+    // Fetch reports from API
+    const fetchReports = async () => {
+        try {
+            setLoading(true)
+            setError('')
 
-    // Mock batches data
-    const batches: Batch[] = [
-        {
-            id: 'batch_001',
-            name: 'Morning Reports - Jan 15',
-            createdAt: '2024-01-15T10:30:00Z',
-            reportCount: 5,
-            verifiedCount: 3,
-            status: 'completed',
-            templateType: 'Laboratory Report'
-        },
-        {
-            id: 'batch_002',
-            name: 'Afternoon Reports - Jan 15',
-            createdAt: '2024-01-15T14:00:00Z',
-            reportCount: 3,
-            verifiedCount: 2,
-            status: 'completed',
-            templateType: 'Mixed Templates'
-        },
-        {
-            id: 'batch_003',
-            name: 'Evening Reports - Jan 16',
-            createdAt: '2024-01-16T18:00:00Z',
-            reportCount: 7,
-            verifiedCount: 0,
-            status: 'processing',
-            templateType: 'X-Ray Report'
+            console.log('🚀 Fetching lab reports...')
+            const response = await apiClient.get('/lab-reports')
+            console.log('✅ API Response:', response)
+            console.log('📊 Response data:', response.data)
+
+            // Handle response structure
+            let reportsData = []
+            if (Array.isArray(response.data)) {
+                reportsData = response.data
+            } else if (response.data?.data && Array.isArray(response.data.data)) {
+                reportsData = response.data.data
+            } else if (response.data?.reports && Array.isArray(response.data.reports)) {
+                reportsData = response.data.reports
+            } else {
+                console.warn('⚠️ Unexpected response structure:', response.data)
+                reportsData = []
+            }
+
+            console.log('📋 Reports data:', reportsData)
+
+            // Transform API data to match our interface
+            const transformedReports: Report[] = reportsData.map((report: any) => {
+                console.log('🔄 Transforming report:', report)
+
+                // Extract patient name from extracted data or use fallback
+                const patientName = report.extracted_data?.patientInfo?.name ||
+                    report.patient_name ||
+                    `Patient ${report.id}`
+
+                // Determine verification status
+                let status: 'verified' | 'unverified' | 'processing' = 'unverified'
+                if (report.verification_status === 'verified' || report.verified_by) {
+                    status = 'verified'
+                } else if (report.verification_status === 'processing') {
+                    status = 'processing'
+                }
+
+                // Extract batch info
+                const batchId = report.batch?.id?.toString() ||
+                    report.batch_id?.toString() ||
+                    'unknown'
+
+                const batchName = report.batch?.name || `Batch ${batchId}`
+
+                return {
+                    id: report.id.toString(),
+                    fileName: report.original_filename || report.filename || `Report ${report.id}`,
+                    patientName: patientName,
+                    reportType: report.report_type || 'Medical Report',
+                    uploadDate: report.created_at || new Date().toISOString(),
+                    processedDate: report.updated_at || report.created_at || new Date().toISOString(),
+                    status: status,
+                    batchId: batchId,
+                    extractedData: report.extracted_data,
+                    verifiedBy: report.verified_by || undefined,
+                    priority: 'medium', // Default priority, you can extract this if available
+                    original_filename: report.original_filename,
+                    uploader: report.uploader,
+                    created_at: report.created_at,
+                    updated_at: report.updated_at,
+                    verification_status: report.verification_status,
+                    batch: {
+                        id: parseInt(batchId),
+                        name: batchName
+                    }
+                }
+            })
+
+            console.log('✅ Transformed reports:', transformedReports)
+            setReports(transformedReports)
+
+            // Extract unique batches for filter dropdown
+            const uniqueBatches = transformedReports.reduce((acc: { id: string, name: string }[], report) => {
+                const existingBatch = acc.find(b => b.id === report.batchId)
+                if (!existingBatch && report.batch) {
+                    acc.push({
+                        id: report.batchId,
+                        name: report.batch.name
+                    })
+                }
+                return acc
+            }, [])
+
+            console.log('📦 Available batches:', uniqueBatches)
+            setAvailableBatches(uniqueBatches)
+
+        } catch (err: any) {
+            console.error('💥 Failed to fetch reports:', err)
+            console.error('📝 Error details:', err.response?.data)
+
+            let errorMessage = 'Failed to load reports'
+            if (err.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (err.response?.status === 403) {
+                errorMessage = 'You do not have permission to view reports'
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            setError(errorMessage)
+        } finally {
+            setLoading(false)
         }
-    ]
+    }
+
+    // Fetch reports on component mount
+    useEffect(() => {
+        fetchReports()
+    }, [])
 
     const filteredReports = reports.filter(report => {
         const matchesSearch = report.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             report.patientName.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesFilter = filterType === 'all' || report.reportType === filterType
+        const matchesBatch = filterBatch === 'all' || report.batchId === filterBatch
         const matchesTab = activeTab === 'all' ||
             (activeTab === 'verified' && report.status === 'verified') ||
             (activeTab === 'unverified' && report.status === 'unverified')
 
-        return matchesSearch && matchesFilter && matchesTab
+        return matchesSearch && matchesBatch && matchesTab
     })
 
     const formatDate = (dateString: string) => {
@@ -201,6 +252,37 @@ export default function ReportsPage() {
         }
     }
 
+    // Mock batches data for batch history tab
+    const batches: Batch[] = [
+        {
+            id: 'batch_001',
+            name: 'Morning Reports - Jan 15',
+            createdAt: '2024-01-15T10:30:00Z',
+            reportCount: 5,
+            verifiedCount: 3,
+            status: 'completed',
+            templateType: 'Laboratory Report'
+        },
+        {
+            id: 'batch_002',
+            name: 'Afternoon Reports - Jan 15',
+            createdAt: '2024-01-15T14:00:00Z',
+            reportCount: 3,
+            verifiedCount: 2,
+            status: 'completed',
+            templateType: 'Mixed Templates'
+        },
+        {
+            id: 'batch_003',
+            name: 'Evening Reports - Jan 16',
+            createdAt: '2024-01-16T18:00:00Z',
+            reportCount: 7,
+            verifiedCount: 0,
+            status: 'processing',
+            templateType: 'X-Ray Report'
+        }
+    ]
+
     const getBatchStatusBadge = (status: string) => {
         switch (status) {
             case 'completed':
@@ -234,6 +316,39 @@ export default function ReportsPage() {
         verified: reports.filter(r => r.status === 'verified').length,
         unverified: reports.filter(r => r.status === 'unverified').length,
         processing: reports.filter(r => r.status === 'processing').length
+    }
+
+    // Handle view report details
+    const handleViewReport = (reportId: string) => {
+        console.log('🔍 Viewing report details for ID:', reportId)
+        router.push(`/main/reports/report-details?id=${reportId}`)
+    }
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-gray-600">Loading reports...</span>
+                </div>
+            </DashboardLayout>
+        )
+    }
+
+    if (error) {
+        return (
+            <DashboardLayout>
+                <div className="text-center py-12">
+                    <div className="text-red-600 text-lg font-medium">{error}</div>
+                    <button
+                        onClick={fetchReports}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </DashboardLayout>
+        )
     }
 
     return (
@@ -325,19 +440,20 @@ export default function ReportsPage() {
                                             placeholder="Search reports..."
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                                         />
                                     </div>
                                     <select
-                                        value={filterType}
-                                        onChange={(e) => setFilterType(e.target.value)}
+                                        value={filterBatch}
+                                        onChange={(e) => setFilterBatch(e.target.value)}
                                         className="block px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
                                     >
-                                        <option value="all">All Types</option>
-                                        <option value="Laboratory Report">Laboratory Report</option>
-                                        <option value="X-Ray Report">X-Ray Report</option>
-                                        <option value="Blood Test Report">Blood Test Report</option>
-                                        <option value="Consultation Notes">Consultation Notes</option>
+                                        <option value="all">All Batches</option>
+                                        {availableBatches.map((batch) => (
+                                            <option key={batch.id} value={batch.id}>
+                                                {batch.name}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -382,7 +498,7 @@ export default function ReportsPage() {
                                         <tr
                                             key={report.id}
                                             className="hover:bg-gray-50 cursor-pointer"
-                                            onClick={() => router.push(`/main/reports/report-details?id=${report.id}`)}
+                                            onClick={() => handleViewReport(report.id)}
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
@@ -392,7 +508,7 @@ export default function ReportsPage() {
                                                             {report.fileName}
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            Batch: {report.batchId}
+                                                            Batch: {report.batch?.name || report.batchId}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -415,13 +531,20 @@ export default function ReportsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
                                                     <button
-                                                        onClick={() => router.push(`/main/reports/report-details?id=${report.id}`)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleViewReport(report.id)
+                                                        }}
                                                         className="text-blue-600 hover:text-blue-900"
                                                         title="View Details"
                                                     >
                                                         <Eye className="h-4 w-4" />
                                                     </button>
-                                                    <button className="text-green-600 hover:text-green-900">
+                                                    <button
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="text-green-600 hover:text-green-900"
+                                                        title="Download Report"
+                                                    >
                                                         <Download className="h-4 w-4" />
                                                     </button>
                                                 </div>
@@ -430,6 +553,19 @@ export default function ReportsPage() {
                                     ))}
                                 </tbody>
                             </table>
+
+                            {filteredReports.length === 0 && !loading && (
+                                <div className="text-center py-12">
+                                    <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                                    <h3 className="mt-2 text-sm font-medium text-gray-900">No reports found</h3>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        {searchQuery || filterBatch !== 'all'
+                                            ? 'Try adjusting your search or filter criteria.'
+                                            : 'No reports have been uploaded yet.'
+                                        }
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         /* Batch History Table */

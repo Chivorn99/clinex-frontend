@@ -162,9 +162,9 @@ export default function HomePage() {
                                         <Users className="h-8 w-8 text-gray-400 mb-2" />
                                         <span className="text-sm font-medium text-gray-900">View Patient</span>
                                     </button>
-                                    <button className="flex flex-col items-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                                    <button onClick={() => router.push('/main/verification/monitoring')} className="flex flex-col items-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                                         <Clock className="h-8 w-8 text-gray-400 mb-2" />
-                                        <span className="text-sm font-medium text-gray-900">View Queue</span>
+                                        <span className="text-sm font-medium text-gray-900">Ready To Verify</span>
                                     </button>
                                     <button className="flex flex-col items-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                                         <Calendar className="h-8 w-8 text-gray-400 mb-2" />

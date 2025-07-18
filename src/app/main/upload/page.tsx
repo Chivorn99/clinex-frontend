@@ -139,7 +139,7 @@ export default function UploadPage() {
             // If auto-processing is enabled, redirect to monitoring
             if (autoProcess) {
                 setTimeout(() => {
-                    router.push(`/main/verification/monitoring?batch=${batch.id}`)
+                    router.push(`/main/verification/monitoring`)
                 }, 1500)
             } else {
                 console.log('Batch uploaded successfully. Ready for manual processing.')
@@ -193,7 +193,7 @@ export default function UploadPage() {
             
             // Handle different response structures
             if (response.success || response.data || response.id) {
-                router.push(`/main/verification/monitoring?batch=${currentBatch.id}`)
+                router.push(`/main/verification/monitoring`)
             } else {
                 setError('Failed to start processing')
             }

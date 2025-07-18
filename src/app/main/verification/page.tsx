@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { ArrowLeft, FileText, User, Calendar, Clock, Phone, Plus, Trash2, Edit, Save, X, Eye, CheckCircle, AlertTriangle, Maximize, Minimize, Clock as ClockIcon } from 'lucide-react'
+import { ArrowLeft, FileText, User, Calendar, Clock, Phone, Plus, Trash2, Edit, Save, X, Eye, CheckCircle, AlertTriangle, Maximize, Minimize, Clock as ClockIcon, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 interface PatientInfo {
     name: string
@@ -41,6 +42,34 @@ interface ProcessedReport {
     testResults: TestResult[]
     pdfUrl: string
     processingProgress: number
+    extracted_data?: any
+    original_filename?: string
+    uploader?: {
+        id: number
+        name: string
+        email: string
+    }
+}
+
+interface BatchInfo {
+    id: number
+    name: string
+    status: string
+}
+
+interface BatchVerificationResponse {
+    success: boolean
+    data: {
+        batch: BatchInfo
+        reports_to_verify: {
+            data: any[]
+            total: number
+            current_page: number
+            last_page: number
+        }
+        total_pending_verification: number
+    }
+    message: string
 }
 
 export default function VerificationPage() {
@@ -55,6 +84,8 @@ export default function VerificationPage() {
     const [editingField, setEditingField] = useState<string | null>(null)
     const [isPreviewExpanded, setIsPreviewExpanded] = useState(false)
     const [processingAnimation, setProcessingAnimation] = useState(true)
+    const [batchInfo, setBatchInfo] = useState<BatchInfo | null>(null)
+    const [error, setError] = useState('')
 
     // Modal states
     const [showCategoryModal, setShowCategoryModal] = useState(false)
@@ -75,118 +106,254 @@ export default function VerificationPage() {
         clinic: 'Smith Medical Clinic'
     } : mockUser
 
-    // Mock processed reports data
-    const mockReports: ProcessedReport[] = [
-        {
-            id: 'rpt_001',
-            fileName: 'lab_report_john_doe.pdf',
-            status: 'completed',
-            processingProgress: 100,
-            pdfUrl: '/api/placeholder/400/600',
-            patientInfo: {
-                name: "សាន សេងយាន",
-                patientId: "PT001871",
-                age: "72 Y",
-                gender: "Female",
-                phone: "069366717"
-            },
-            labInfo: {
-                labId: "LT001235",
-                requestedBy: "Dr. CHHORN Sophy",
-                requestedDate: "17/03/2024 12:57",
-                collectedDate: "17/03/2024 13:36",
-                analysisDate: "17/03/2024 13:36",
-                validatedBy: "SREYNEANG - B.Sc"
-            },
-            testResults: [
-                {
-                    id: '1',
-                    category: "BIOCHEMISTRY",
-                    testName: "Glucose",
-                    result: "6.5",
-                    unit: "mmol/L",
-                    referenceRange: "(3.9-6.1)",
-                    flag: "high"
-                },
-                {
-                    id: '2',
-                    category: "BIOCHEMISTRY",
-                    testName: "Creatinine",
-                    result: "85",
-                    unit: "umol/L",
-                    referenceRange: "(44-80)",
-                    flag: "high"
-                },
-                {
-                    id: '3',
-                    category: "HEMATOLOGY",
-                    testName: "Hemoglobin",
-                    result: "12.5",
-                    unit: "g/dL",
-                    referenceRange: "(12.0-15.5)",
-                    flag: "normal"
-                }
-            ]
-        },
-        {
-            id: 'rpt_002',
-            fileName: 'blood_test_jane_smith.pdf',
-            status: 'completed',
-            processingProgress: 100,
-            pdfUrl: '/api/placeholder/400/600',
-            patientInfo: {
-                name: "Jane Smith",
-                patientId: "PT001872",
-                age: "45 Y",
-                gender: "Female",
-                phone: "012345678"
-            },
-            labInfo: {
-                labId: "LT001236",
-                requestedBy: "Dr. John Wilson",
-                requestedDate: "18/03/2024 10:30",
-                collectedDate: "18/03/2024 11:00",
-                analysisDate: "18/03/2024 11:30",
-                validatedBy: "MARY - B.Sc"
-            },
-            testResults: [
-                {
-                    id: '4',
-                    category: "LIPID PROFILE",
-                    testName: "Total Cholesterol",
-                    result: "5.8",
-                    unit: "mmol/L",
-                    referenceRange: "(<5.2)",
-                    flag: "high"
-                }
-            ]
-        },
-        {
-            id: 'rpt_003',
-            fileName: 'urine_test_mike_johnson.pdf',
-            status: 'processing',
-            processingProgress: 75,
-            pdfUrl: '/api/placeholder/400/600',
-            patientInfo: {
-                name: "",
-                patientId: "",
-                age: "",
-                gender: "",
-                phone: ""
-            },
-            labInfo: {
-                labId: "",
-                requestedBy: "",
-                requestedDate: "",
-                collectedDate: "",
-                analysisDate: "",
-                validatedBy: ""
-            },
-            testResults: []
-        }
-    ]
-
     useEffect(() => {
+        if (batchId) {
+            fetchBatchReports()
+        } else {
+            // If no batch ID, show all reports (existing behavior)
+            fetchAllReports()
+        }
+    }, [batchId])
+
+    const fetchBatchReports = async () => {
+        try {
+            setIsProcessing(true)
+            setError('') // Clear any previous errors
+            
+            console.log('🚀 Fetching reports for batch:', batchId)
+            
+            const response = await apiClient.get(`/batches/${batchId}/reports-for-verification`)
+            console.log('✅ Full API Response received:', response)
+            console.log('📊 Response status:', response.status)
+            console.log('📦 Response data:', response.data)
+            console.log('🔍 Response data type:', typeof response.data)
+            console.log('🗝️ Response data keys:', Object.keys(response.data || {}))
+            
+            // The response.data contains the actual API response directly
+            const apiResponse = response.data
+            
+            // Check if response has the expected structure
+            if (!apiResponse) {
+                throw new Error('No data received from API')
+            }
+            
+            // Check if it has the expected batch structure
+            const hasBatch = 'batch' in apiResponse
+            const hasReportsToVerify = 'reports_to_verify' in apiResponse
+            const hasReportsArray = apiResponse.reports_to_verify?.data && Array.isArray(apiResponse.reports_to_verify.data)
+            
+            console.log('🔧 Structure check:', {
+                hasBatch,
+                hasReportsToVerify,
+                hasReportsArray,
+                batchInfo: apiResponse.batch,
+                reportsCount: hasReportsArray ? apiResponse.reports_to_verify.data.length : 'N/A'
+            })
+            
+            if (!hasBatch || !hasReportsToVerify) {
+                throw new Error('Invalid API response structure - missing batch or reports_to_verify')
+            }
+            
+            console.log('🎉 Processing successful response')
+            
+            // Extract batch info
+            if (apiResponse.batch) {
+                setBatchInfo(apiResponse.batch)
+                console.log('📋 Batch info set:', apiResponse.batch)
+            } else {
+                console.warn('⚠️ No batch info found in response')
+                // Create a fallback batch info
+                setBatchInfo({
+                    id: parseInt(batchId || '0'),
+                    name: `Batch ${batchId}`,
+                    status: 'completed'
+                })
+            }
+            
+            // Extract reports data
+            let reportsData: any[] = []
+            
+            if (hasReportsArray) {
+                reportsData = apiResponse.reports_to_verify.data
+                console.log('📊 Found reports in reports_to_verify.data:', reportsData.length)
+                console.log('📋 First report sample:', reportsData[0] ? {
+                    id: reportsData[0].id,
+                    filename: reportsData[0].original_filename,
+                    hasExtractedData: !!reportsData[0].extracted_data,
+                    testResultsCount: reportsData[0].extracted_data?.testResults?.length || 0
+                } : 'No reports')
+            } else {
+                console.warn('⚠️ reports_to_verify.data is not an array or missing')
+                console.log('🔍 Available in reports_to_verify:', Object.keys(apiResponse.reports_to_verify || {}))
+            }
+            
+            console.log('🔄 Starting transformation of', reportsData.length, 'reports')
+            
+            // Transform the reports data
+            const transformedReports = reportsData.map((report: any, index: number) => {
+                console.log(`🔄 Processing report ${index + 1}/${reportsData.length}:`, report.id, report.original_filename)
+                
+                const extractedData = report.extracted_data || {}
+                console.log(`📊 Extracted data for report ${report.id}:`, {
+                    hasPatientInfo: !!extractedData.patientInfo,
+                    hasLabInfo: !!extractedData.labInfo,
+                    testResultsCount: extractedData.testResults?.length || 0,
+                    patientName: extractedData.patientInfo?.name,
+                    labId: extractedData.labInfo?.labId
+                })
+                
+                const transformed = {
+                    id: report.id.toString(),
+                    fileName: report.original_filename || report.filename || `Report ${report.id}`,
+                    status: 'completed' as const,
+                    processingProgress: 100,
+                    pdfUrl: `/api/placeholder/400/600`, // You might want to use actual PDF URL from report.storage_path
+                    patientInfo: {
+                        name: extractedData.patientInfo?.name || '',
+                        patientId: extractedData.patientInfo?.patientId || '',
+                        age: extractedData.patientInfo?.age || '',
+                        gender: extractedData.patientInfo?.gender || '',
+                        phone: extractedData.patientInfo?.phone || ''
+                    },
+                    labInfo: {
+                        labId: extractedData.labInfo?.labId || '',
+                        requestedBy: extractedData.labInfo?.requestedBy || '',
+                        requestedDate: extractedData.labInfo?.requestedDate || '',
+                        collectedDate: extractedData.labInfo?.collectedDate || '',
+                        analysisDate: extractedData.labInfo?.analysisDate || '',
+                        validatedBy: extractedData.labInfo?.validatedBy || ''
+                    },
+                    testResults: (extractedData.testResults || []).map((test: any, testIndex: number) => ({
+                        id: `${report.id}_${testIndex}`,
+                        category: test.category || '',
+                        testName: test.testName || '',
+                        result: test.result || '',
+                        unit: test.unit || '',
+                        referenceRange: test.referenceRange || '',
+                        flag: test.flag === 'H' ? 'high' : test.flag === 'L' ? 'low' : test.flag === 'C' ? 'critical' : 'normal'
+                    })),
+                    extracted_data: extractedData,
+                    original_filename: report.original_filename,
+                    uploader: report.uploader
+                }
+                
+                console.log(`✅ Transformed report ${report.id}:`, {
+                    id: transformed.id,
+                    fileName: transformed.fileName,
+                    testResultsCount: transformed.testResults.length,
+                    patientName: transformed.patientInfo.name,
+                    labId: transformed.labInfo.labId
+                })
+                
+                return transformed
+            })
+            
+            console.log('🎊 All reports transformed successfully:', transformedReports.length)
+            console.log('📋 Transformed reports summary:', transformedReports.map(r => ({
+                id: r.id,
+                fileName: r.fileName,
+                testCount: r.testResults.length
+            })))
+            
+            setReports(transformedReports)
+            
+            // Select first report automatically
+            if (transformedReports.length > 0) {
+                setSelectedReport(transformedReports[0])
+                console.log('👆 Selected first report:', transformedReports[0].id, transformedReports[0].fileName)
+            } else {
+                console.log('ℹ️ No reports to select')
+            }
+            
+            setError('')
+            console.log('✅ Successfully processed batch reports')
+            
+        } catch (err: any) {
+            console.error('💥 Failed to fetch batch reports - Full error:', err)
+            console.error('📝 Error message:', err.message)
+            console.error('🌐 Error response:', err.response)
+            console.error('📦 Error response data:', err.response?.data)
+            console.error('🔢 Error response status:', err.response?.status)
+            console.error('📋 Error response headers:', err.response?.headers)
+            
+            // Set a more specific error message
+            let errorMessage = 'Failed to load batch reports'
+            
+            if (err.response?.status === 404) {
+                errorMessage = `Batch ${batchId} not found or has no reports ready for verification`
+            } else if (err.response?.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (err.response?.status === 403) {
+                errorMessage = 'You do not have permission to access this batch'
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+            
+            setError(errorMessage)
+        } finally {
+            setIsProcessing(false)
+            setProcessingAnimation(false)
+        }
+    }
+
+    const fetchAllReports = () => {
+        // Existing mock data logic for when no batch is specified
+        const mockReports: ProcessedReport[] = [
+            {
+                id: 'rpt_001',
+                fileName: 'lab_report_john_doe.pdf',
+                status: 'completed',
+                processingProgress: 100,
+                pdfUrl: '/api/placeholder/400/600',
+                patientInfo: {
+                    name: "សាន សេងយាន",
+                    patientId: "PT001871",
+                    age: "72 Y",
+                    gender: "Female",
+                    phone: "069366717"
+                },
+                labInfo: {
+                    labId: "LT001235",
+                    requestedBy: "Dr. CHHORN Sophy",
+                    requestedDate: "17/03/2024 12:57",
+                    collectedDate: "17/03/2024 13:36",
+                    analysisDate: "17/03/2024 13:36",
+                    validatedBy: "SREYNEANG - B.Sc"
+                },
+                testResults: [
+                    {
+                        id: '1',
+                        category: "BIOCHEMISTRY",
+                        testName: "Glucose",
+                        result: "6.5",
+                        unit: "mmol/L",
+                        referenceRange: "(3.9-6.1)",
+                        flag: "high"
+                    },
+                    {
+                        id: '2',
+                        category: "BIOCHEMISTRY",
+                        testName: "Creatinine",
+                        result: "85",
+                        unit: "umol/L",
+                        referenceRange: "(44-80)",
+                        flag: "high"
+                    },
+                    {
+                        id: '3',
+                        category: "HEMATOLOGY",
+                        testName: "Hemoglobin",
+                        result: "12.5",
+                        unit: "g/dL",
+                        referenceRange: "(12.0-15.5)",
+                        flag: "normal"
+                    }
+                ]
+            }
+        ]
+
         setTimeout(() => {
             setProcessingAnimation(false)
             setReports(mockReports)
@@ -196,7 +363,7 @@ export default function VerificationPage() {
                 setSelectedReport(firstCompleted)
             }
         }, 3000)
-    }, [])
+    }
 
     const updatePatientInfo = (field: keyof PatientInfo, value: string) => {
         if (!selectedReport) return
@@ -298,7 +465,11 @@ export default function VerificationPage() {
         setTimeout(() => {
             console.log('Saving for later verification:', selectedReport)
             setIsSubmitting(false)
-            router.push('/main/reports?status=unverified')
+            if (batchId) {
+                router.push('/main/reports')
+            } else {
+                router.push('/main/reports?status=unverified')
+            }
         }, 1000)
     }
 
@@ -307,11 +478,15 @@ export default function VerificationPage() {
 
         setIsSubmitting(true)
 
-        // TODO: Submit verified data
+        // TODO: Submit verified data to API
         setTimeout(() => {
             console.log('Submitting verified data:', selectedReport)
             setIsSubmitting(false)
-            router.push('/main/reports?status=verified')
+            if (batchId) {
+                router.push('/main/main/reports')
+            } else {
+                router.push('/main/reports?status=verified')
+            }
         }, 1000)
     }
 
@@ -342,16 +517,60 @@ export default function VerificationPage() {
                             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
                             <FileText className="h-8 w-8 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                         </div>
-                        <h2 className="mt-6 text-2xl font-bold text-gray-900">Processing Documents</h2>
-                        <p className="mt-2 text-gray-600">Extracting data from your PDF reports...</p>
+                        <h2 className="mt-6 text-2xl font-bold text-gray-900">Loading Reports</h2>
+                        <p className="mt-2 text-gray-600">
+                            {batchId ? `Loading reports from ${batchInfo?.name || `Batch ${batchId}`}...` : 'Extracting data from your PDF reports...'}
+                        </p>
                         <div className="mt-6 w-64 mx-auto">
                             <div className="flex justify-between text-sm text-gray-500 mb-2">
                                 <span>Progress</span>
-                                <span>Processing...</span>
+                                <span>Loading...</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">
                                 <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </DashboardLayout>
+        )
+    }
+
+    // Add retry function
+    const retryFetchBatchReports = () => {
+        setError('')
+        fetchBatchReports()
+    }
+
+    // Update the error display section
+    if (error) {
+        return (
+            <DashboardLayout>
+                <div className="min-h-screen flex items-center justify-center">
+                    <div className="text-center max-w-md">
+                        <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Reports</h2>
+                        <p className="text-gray-600 mb-6">{error}</p>
+                        <div className="space-y-3">
+                            <button
+                                onClick={retryFetchBatchReports}
+                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mr-3"
+                            >
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Retry
+                            </button>
+                            <button
+                                onClick={() => router.push('/main/verification/monitoring')}
+                                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                            >
+                                <ArrowLeft className="h-4 w-4 mr-2" />
+                                Back to Monitoring
+                            </button>
+                        </div>
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-left">
+                            <p className="text-sm text-gray-700 font-medium mb-2">Debug Info:</p>
+                            <p className="text-xs text-gray-600">Batch ID: {batchId}</p>
+                            <p className="text-xs text-gray-600">Endpoint: /batches/{batchId}/reports-for-verification</p>
                         </div>
                     </div>
                 </div>
@@ -366,15 +585,22 @@ export default function VerificationPage() {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                         <button
-                            onClick={() => router.back()}
+                            onClick={() => router.push('/main/verification/monitoring')}
                             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                         >
                             <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back to Upload
+                            Back to Monitoring
                         </button>
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Data Verification</h1>
-                            <p className="mt-1 text-gray-600">Review and verify extracted data before submission</p>
+                            <h1 className="text-3xl font-bold text-gray-900">
+                                {batchId ? `Batch Verification - ${batchInfo?.name || `Batch ${batchId}`}` : 'Data Verification'}
+                            </h1>
+                            <p className="mt-1 text-gray-600">
+                                {batchId 
+                                    ? `Review and verify ${reports.length} reports from this batch`
+                                    : 'Review and verify extracted data before submission'
+                                }
+                            </p>
                         </div>
                     </div>
                     <div className="flex space-x-3">
@@ -414,6 +640,32 @@ export default function VerificationPage() {
                         </button>
                     </div>
                 </div>
+
+                {/* Batch Info Banner */}
+                {batchInfo && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-4">
+                            <div className="flex-shrink-0">
+                                <FileText className="h-8 w-8 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-medium text-blue-900">{batchInfo.name}</h3>
+                                <p className="text-blue-700">
+                                    Verifying {reports.length} reports from this batch
+                                </p>
+                            </div>
+                            <div className="flex-shrink-0">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                    batchInfo.status === 'completed' 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                    {batchInfo.status}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -462,6 +714,12 @@ export default function VerificationPage() {
                                                 ></div>
                                             </div>
                                         )}
+                                        {/* Show uploader info if available */}
+                                        {report.uploader && (
+                                            <div className="mt-2 text-xs text-gray-500">
+                                                Uploaded by: {report.uploader.name}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -490,7 +748,7 @@ export default function VerificationPage() {
                                                     type="text"
                                                     value={value}
                                                     onChange={(e) => updatePatientInfo(key as keyof PatientInfo, e.target.value)}
-                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                     placeholder={`Enter ${key.replace(/([A-Z])/g, ' $1').trim().toLowerCase()}`}
                                                 />
                                             </div>
@@ -516,7 +774,7 @@ export default function VerificationPage() {
                                                     type="text"
                                                     value={value}
                                                     onChange={(e) => updateLabInfo(key as keyof LabInfo, e.target.value)}
-                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                     placeholder={`Enter ${key.replace(/([A-Z])/g, ' $1').trim().toLowerCase()}`}
                                                 />
                                             </div>
@@ -573,7 +831,7 @@ export default function VerificationPage() {
                                                                         type="text"
                                                                         value={test.testName}
                                                                         onChange={(e) => updateTestResult(test.id, 'testName', e.target.value)}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                                         placeholder="Test name"
                                                                     />
                                                                 </td>
@@ -582,7 +840,7 @@ export default function VerificationPage() {
                                                                         type="text"
                                                                         value={test.result}
                                                                         onChange={(e) => updateTestResult(test.id, 'result', e.target.value)}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                                         placeholder="Result"
                                                                     />
                                                                 </td>
@@ -591,7 +849,7 @@ export default function VerificationPage() {
                                                                         type="text"
                                                                         value={test.unit}
                                                                         onChange={(e) => updateTestResult(test.id, 'unit', e.target.value)}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                                         placeholder="Unit"
                                                                     />
                                                                 </td>
@@ -600,7 +858,7 @@ export default function VerificationPage() {
                                                                         type="text"
                                                                         value={test.referenceRange}
                                                                         onChange={(e) => updateTestResult(test.id, 'referenceRange', e.target.value)}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-400"
                                                                         placeholder="Reference range"
                                                                     />
                                                                 </td>
@@ -611,7 +869,7 @@ export default function VerificationPage() {
                                                                             const value = e.target.value === '' ? null : e.target.value;
                                                                             updateTestResult(test.id, 'flag', value as TestResult['flag']);
                                                                         }}
-                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                                                        className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                                                                     >
                                                                         <option value="">Select flag</option>
                                                                         <option value="normal">Normal</option>
@@ -722,7 +980,7 @@ export default function VerificationPage() {
                         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                             {/* Background overlay */}
                             <div
-                                className="fixed inset-0  bg-opacity-10 backdrop-filter backdrop-blur-md transition-opacityy"
+                                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
                                 aria-hidden="true"
                                 onClick={() => setShowCategoryModal(false)}
                             ></div>
@@ -731,7 +989,7 @@ export default function VerificationPage() {
                             <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
                             {/* Modal panel */}
-                            <div className="relative inline-block align-bottom rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                            <div className="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
                                 <div className="sm:flex sm:items-start">
                                     <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
                                         <Plus className="h-6 w-6 text-blue-600" aria-hidden="true" />
@@ -759,7 +1017,7 @@ export default function VerificationPage() {
                                                         handleCategorySubmit()
                                                     }
                                                 }}
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
                                                 placeholder="e.g., BLOOD CHEMISTRY, IMMUNOLOGY"
                                                 autoFocus
                                             />
