@@ -1,118 +1,208 @@
 'use client'
 import { useState, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { Upload, FileText, Trash2, Eye, Download, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { Upload, FileText, Trash2, Eye, AlertCircle, CheckCircle, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { apiClient } from '@/lib/api'
 
 interface UploadedFile {
     id: string
     name: string
     size: number
     file: File
-    status: 'uploading' | 'completed' | 'error'
+    status: 'ready' | 'uploading' | 'completed' | 'error'
     progress: number
 }
 
-interface PDFTemplate {
-    id: string
+interface BatchResponse {
+    id: number
     name: string
-    description: string
+    status: string
+    total_reports: number
+    processed_reports: number
+    failed_reports: number
+    created_at: string
+    uploaded_files?: any[]
 }
 
 export default function UploadPage() {
     const { user } = useAuth()
-    const [selectedTemplate, setSelectedTemplate] = useState<string>('')
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
     const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-    const [isProcessing, setIsProcessing] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
     const [isDragOver, setIsDragOver] = useState(false)
+    const [currentBatch, setCurrentBatch] = useState<BatchResponse | null>(null)
+    const [error, setError] = useState<string>('')
+    const [autoProcess, setAutoProcess] = useState(true)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const miniUploadInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
-
-    // Fallback mock user data
-    const mockUser = {
-        name: 'Dr. Sarah Johnson',
-        email: 'sarah@smithclinic.com',
-        clinic: 'Smith Medical Clinic'
-    }
-
-    // Use auth user if available, otherwise fallback to mock
-    const currentUser = user ? {
-        name: user.name,
-        email: user.email,
-        clinic: 'Smith Medical Clinic'
-    } : mockUser
-
-    // PDF Templates
-    const pdfTemplates: PDFTemplate[] = [
-        {
-            id: 'lab-report',
-            name: 'Laboratory Report',
-            description: 'Extract patient information, test results, reference ranges, and medical values from laboratory reports.'
-        },
-        {
-            id: 'xray-report',
-            name: 'X-Ray Report',
-            description: 'Process radiological findings, impressions, and diagnostic conclusions from X-ray examination reports.'
-        },
-        {
-            id: 'blood-test',
-            name: 'Blood Test Report',
-            description: 'Parse blood work results including CBC, chemistry panels, and other hematological analyses.'
-        },
-        {
-            id: 'prescription',
-            name: 'Prescription',
-            description: 'Extract medication names, dosages, instructions, and prescriber information from prescription documents.'
-        },
-        {
-            id: 'consultation',
-            name: 'Consultation Notes',
-            description: 'Process patient consultation records, symptoms, diagnoses, and treatment plans from medical notes.'
-        }
-    ]
-
-    const selectedTemplateInfo = pdfTemplates.find(template => template.id === selectedTemplate)
 
     const handleFileSelect = (files: FileList | null) => {
         if (!files) return
 
-        Array.from(files).forEach((file) => {
-            if (file.type === 'application/pdf') {
-                const newFile: UploadedFile = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: file.name,
-                    size: file.size,
-                    file: file,
-                    status: 'uploading',
-                    progress: 0
-                }
+        setError('')
+        const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf')
 
-                setUploadedFiles(prev => [...prev, newFile])
-                simulateUpload(newFile.id)
-            }
-        })
+        if (pdfFiles.length === 0) {
+            setError('Please select only PDF files')
+            return
+        }
+
+        if (pdfFiles.length > 20) {
+            setError('Maximum 20 files allowed per batch')
+            return
+        }
+
+        // Add files to UI
+        const newFiles: UploadedFile[] = pdfFiles.map(file => ({
+            id: Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            size: file.size,
+            file: file,
+            status: 'ready',
+            progress: 0
+        }))
+
+        setUploadedFiles(prev => [...prev, ...newFiles])
     }
 
-    const simulateUpload = (fileId: string) => {
-        const interval = setInterval(() => {
-            setUploadedFiles(prev =>
-                prev.map(file => {
-                    if (file.id === fileId) {
-                        const newProgress = file.progress + Math.random() * 30
-                        if (newProgress >= 100) {
-                            clearInterval(interval)
-                            return { ...file, progress: 100, status: 'completed' }
+    const handleBatchUpload = async () => {
+        if (uploadedFiles.length === 0) {
+            setError('Please select files to upload')
+            return
+        }
+
+        setIsUploading(true)
+        setError('')
+
+        // Update all files to uploading status
+        setUploadedFiles(prev => 
+            prev.map(f => ({ ...f, status: 'uploading' as const, progress: 0 }))
+        )
+
+        try {
+            // Create FormData with files array (matching backend expectation)
+            const formData = new FormData()
+            
+            uploadedFiles.forEach((fileItem) => {
+                formData.append('files[]', fileItem.file)
+            })
+            
+            // Add auto_process flag
+            formData.append('auto_process', autoProcess ? '1' : '0')
+
+            // Simulate progress updates
+            const progressInterval = setInterval(() => {
+                setUploadedFiles(prev =>
+                    prev.map(f => {
+                        if (f.status === 'uploading') {
+                            const newProgress = Math.min(f.progress + Math.random() * 15, 90)
+                            return { ...f, progress: newProgress }
                         }
-                        return { ...file, progress: newProgress }
-                    }
-                    return file
-                })
+                        return f
+                    })
+                )
+            }, 300)
+
+            // Upload to backend - DON'T SET CONTENT-TYPE FOR FORMDATA
+            const response = await apiClient.post('/batches', formData)
+
+            clearInterval(progressInterval)
+
+            console.log('Full response:', response) // Debug log
+
+            // Handle different response structures
+            let batch: BatchResponse
+            if (response.success && response.data?.batch) {
+                batch = response.data.batch
+            } else if (response.data && response.data.id) {
+                batch = response.data
+            } else if (response.id) {
+                batch = response
+            } else {
+                throw new Error('Invalid response structure')
+            }
+
+            setCurrentBatch(batch)
+
+            // Update all files to completed
+            setUploadedFiles(prev =>
+                prev.map(f => ({ 
+                    ...f, 
+                    status: 'completed' as const, 
+                    progress: 100 
+                }))
             )
-        }, 200)
+
+            // If auto-processing is enabled, redirect to monitoring
+            if (autoProcess) {
+                setTimeout(() => {
+                    router.push(`/main/verification/monitoring?batch=${batch.id}`)
+                }, 1500)
+            } else {
+                console.log('Batch uploaded successfully. Ready for manual processing.')
+            }
+
+        } catch (error: any) {
+            console.error('Full error details:', {
+                message: error.message,
+                status: error.status,
+                errors: error.errors,
+                stack: error.stack
+            })
+            
+            let errorMessage = 'Failed to upload files. Please try again.'
+            
+            if (error.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (error.status === 422) {
+                errorMessage = `Validation failed: ${
+                    error.errors 
+                        ? Object.values(error.errors).flat().join(', ') 
+                        : error.message
+                }`
+            } else if (error.status === 500) {
+                errorMessage = 'Server error. Please try again later.'
+            } else if (error.message) {
+                errorMessage = error.message
+            }
+            
+            setError(errorMessage)
+            
+            // Update files to error status
+            setUploadedFiles(prev =>
+                prev.map(f => ({ 
+                    ...f, 
+                    status: 'error' as const, 
+                    progress: 0 
+                }))
+            )
+        } finally {
+            setIsUploading(false)
+        }
+    }
+
+    const handleManualProcess = async () => {
+        if (!currentBatch) return
+
+        try {
+            setIsUploading(true)
+            const response = await apiClient.post(`/batches/${currentBatch.id}/process`)
+            
+            // Handle different response structures
+            if (response.success || response.data || response.id) {
+                router.push(`/main/verification/monitoring?batch=${currentBatch.id}`)
+            } else {
+                setError('Failed to start processing')
+            }
+        } catch (error: any) {
+            console.error('Processing error:', error)
+            setError(error.message || 'Failed to start processing')
+        } finally {
+            setIsUploading(false)
+        }
     }
 
     const handleDrop = (e: React.DragEvent) => {
@@ -144,7 +234,7 @@ export default function UploadPage() {
 
     const handleFilePreview = (fileId: string) => {
         const file = uploadedFiles.find(f => f.id === fileId)
-        if (file && file.status === 'completed') {
+        if (file) {
             if (previewUrl) {
                 URL.revokeObjectURL(previewUrl)
             }
@@ -155,21 +245,20 @@ export default function UploadPage() {
         }
     }
 
-    const handleProcess = () => {
-        if (!selectedTemplate || uploadedFiles.length === 0) return
-        setIsProcessing(true)
-        
-        // TODO: Replace with actual batch processing API call
-        setTimeout(() => {
-            console.log('Processing completed, navigating to verification')
-            // Navigate to verification page with batch ID
-            router.push(`/main/verification?batch=batch_${Date.now()}`)
-        }, 2000)
+    const resetBatch = () => {
+        setCurrentBatch(null)
+        setUploadedFiles([])
+        setSelectedFilePreview(null)
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl)
+            setPreviewUrl(null)
+        }
+        setError('')
     }
 
     const formatFileSize = (bytes: number) => {
         if (bytes === 0) return '0 Bytes'
-        const k = 10024
+        const k = 1024
         const sizes = ['Bytes', 'KB', 'MB', 'GB']
         const i = Math.floor(Math.log(bytes) / Math.log(k))
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
@@ -185,44 +274,77 @@ export default function UploadPage() {
             <div className="space-y-6">
                 {/* Header */}
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">PDF Upload & Processing</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Lab Report Batch Upload</h1>
                     <p className="mt-2 text-gray-600">
-                        Upload medical reports and documents for automated data extraction
+                        Upload multiple lab report PDFs for automated processing
                     </p>
                 </div>
 
-                {/* Template Selection & Description */}
-                <div className="bg-white shadow rounded-lg p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-1">
-                            <label htmlFor="template" className="block text-sm font-medium text-gray-700 mb-2">
-                                Document Template
-                            </label>
-                            <select
-                                id="template"
-                                value={selectedTemplate}
-                                onChange={(e) => setSelectedTemplate(e.target.value)}
-                                className="block w-full px-3 py-2 bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                {/* Error Message */}
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                        <div className="flex">
+                            <AlertCircle className="h-5 w-5 text-red-400" />
+                            <div className="ml-3">
+                                <p className="text-sm text-red-600">{error}</p>
+                            </div>
+                            <button
+                                onClick={() => setError('')}
+                                className="ml-auto text-red-400 hover:text-red-600"
                             >
-                                <option value="">Select template type...</option>
-                                {pdfTemplates.map((template) => (
-                                    <option key={template.id} value={template.id}>
-                                        {template.name}
-                                    </option>
-                                ))}
-                            </select>
+                                <X className="h-5 w-5" />
+                            </button>
                         </div>
-                        <div className="lg:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Template Description
-                            </label>
-                            <div className="p-3 bg-gray-50 rounded-md border">
-                                {selectedTemplateInfo ? (
-                                    <p className="text-sm text-gray-700">{selectedTemplateInfo.description}</p>
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic">Select a template to see its description</p>
+                    </div>
+                )}
+
+                {/* Current Batch Info */}
+                {currentBatch && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-medium text-green-800">
+                                    ✅ Batch Uploaded Successfully
+                                </h3>
+                                <p className="text-sm text-green-600">
+                                    {currentBatch.name} • {currentBatch.total_reports} files
+                                </p>
+                                {autoProcess && (
+                                    <p className="text-xs text-green-600 mt-1">
+                                        Auto-processing enabled - redirecting to monitoring...
+                                    </p>
                                 )}
                             </div>
+                            <button
+                                onClick={resetBatch}
+                                className="text-green-600 hover:text-green-800 text-sm font-medium"
+                            >
+                                Upload New Batch
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Processing Options */}
+                <div className="bg-white shadow rounded-lg p-6">
+                    <div className="flex items-center space-x-4">
+                        <label className="flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={autoProcess}
+                                onChange={(e) => setAutoProcess(e.target.checked)}
+                                disabled={isUploading || currentBatch !== null}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">
+                                Auto-process after upload
+                            </span>
+                        </label>
+                        <div className="text-xs text-gray-500">
+                            {autoProcess 
+                                ? 'Files will be processed automatically after upload' 
+                                : 'Manual processing required after upload'
+                            }
                         </div>
                     </div>
                 </div>
@@ -243,7 +365,7 @@ export default function UploadPage() {
                             ></div>
                         </div>
                         <p className="mt-2 text-sm text-gray-600">
-                            {completedFiles.length} of {uploadedFiles.length} files uploaded successfully
+                            {completedFiles.length} of {uploadedFiles.length} files ready
                         </p>
                     </div>
                 )}
@@ -276,18 +398,19 @@ export default function UploadPage() {
                                 >
                                     <Upload className="h-12 w-12 text-gray-400 mb-4" />
                                     <p className="text-lg font-medium text-gray-900 mb-2">
-                                        {uploadedFiles.length > 0 ? 'Select a file to preview' : 'Upload PDF Documents'}
+                                        {uploadedFiles.length > 0 ? 'Select a file to preview' : 'Upload Lab Report PDFs'}
                                     </p>
                                     <p className="text-sm text-gray-500 text-center mb-4">
                                         {uploadedFiles.length > 0
-                                            ? 'Click on any completed file to view it here'
-                                            : 'Drag and drop PDF files here, or click to select'
+                                            ? 'Click on any file to view it here'
+                                            : 'Drag and drop PDF files here, or click to select (Max 20 files)'
                                         }
                                     </p>
                                     {uploadedFiles.length === 0 && (
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            disabled={isUploading}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                                         >
                                             <Upload className="h-4 w-4 mr-2" />
                                             Choose Files
@@ -311,30 +434,26 @@ export default function UploadPage() {
                         <div className="px-6 py-4 border-b border-gray-200">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-medium text-gray-900">
-                                    Uploaded Files ({uploadedFiles.length})
+                                    Selected Files ({uploadedFiles.length}/20)
                                 </h2>
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium text-sm rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200">
+                                    disabled={isUploading || uploadedFiles.length >= 20}
+                                    className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium text-sm rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
                                     <Upload className="h-4 w-4 mr-2" />
-                                    Upload
+                                    Add Files
                                 </button>
-                                <input
-                                    ref={miniUploadInputRef}
-                                    type="file"
-                                    multiple
-                                    accept=".pdf"
-                                    onChange={(e) => handleFileSelect(e.target.files)}
-                                    className="hidden"
-                                />
                             </div>
                         </div>
                         <div className="flex-1 p-6">
                             {uploadedFiles.length === 0 ? (
                                 <div className="text-center py-12">
                                     <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                                    <p className="text-gray-500">No files uploaded yet</p>
-                                    <p className="text-sm text-gray-400 mt-1">Upload PDF files to see them here</p>
+                                    <p className="text-gray-500">No files selected yet</p>
+                                    <p className="text-sm text-gray-400 mt-1">
+                                        Upload PDF lab reports to see them here
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -351,12 +470,8 @@ export default function UploadPage() {
                                                     <div className="flex items-center space-x-2">
                                                         <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
                                                         <button
-                                                            onClick={() => file.status === 'completed' && handleFilePreview(file.id)}
-                                                            className={`text-sm font-medium truncate ${file.status === 'completed'
-                                                                ? 'text-blue-600 hover:text-blue-800 cursor-pointer'
-                                                                : 'text-gray-900 cursor-default'
-                                                                }`}
-                                                            disabled={file.status !== 'completed'}
+                                                            onClick={() => handleFilePreview(file.id)}
+                                                            className="text-sm font-medium truncate text-blue-600 hover:text-blue-800 cursor-pointer"
                                                         >
                                                             {file.name}
                                                         </button>
@@ -369,6 +484,9 @@ export default function UploadPage() {
                                                         {file.status === 'error' && (
                                                             <AlertCircle className="h-4 w-4 text-red-500" />
                                                         )}
+                                                        {file.status === 'ready' && (
+                                                            <span className="text-xs text-blue-600">Ready</span>
+                                                        )}
                                                     </div>
                                                     {file.status === 'uploading' && (
                                                         <div className="mt-2">
@@ -378,23 +496,23 @@ export default function UploadPage() {
                                                                     style={{ width: `${file.progress}%` }}
                                                                 ></div>
                                                             </div>
+                                                            <span className="text-xs text-gray-500">{Math.round(file.progress)}%</span>
                                                         </div>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center space-x-2 ml-4">
-                                                    {file.status === 'completed' && (
-                                                        <button
-                                                            onClick={() => handleFilePreview(file.id)}
-                                                            className="p-1 text-gray-400 hover:text-blue-600"
-                                                            title="Preview"
-                                                        >
-                                                            <Eye className="h-4 w-4" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => handleFilePreview(file.id)}
+                                                        className="p-1 text-gray-400 hover:text-blue-600"
+                                                        title="Preview"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </button>
                                                     <button
                                                         onClick={() => removeFile(file.id)}
-                                                        className="p-1 text-gray-400 hover:text-red-600"
-                                                        title="Delete"
+                                                        disabled={file.status === 'uploading'}
+                                                        className="p-1 text-gray-400 hover:text-red-600 disabled:opacity-50"
+                                                        title="Remove"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </button>
@@ -406,33 +524,50 @@ export default function UploadPage() {
                             )}
                         </div>
 
-                        {/* Process Button */}
-                        {completedFiles.length > 0 && (
+                        {/* Upload/Process Buttons */}
+                        {uploadedFiles.length > 0 && (
                             <div className="px-6 py-4 border-t border-gray-200">
-                                <div className="flex justify-end">
-                                    <button
-                                        onClick={handleProcess}
-                                        disabled={!selectedTemplate || completedFiles.length === 0 || isProcessing}
-                                        className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isProcessing ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Processing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <FileText className="h-4 w-4 mr-2" />
-                                                Process Documents ({completedFiles.length})
-                                            </>
-                                        )}
-                                    </button>
+                                <div className="flex justify-end space-x-3">
+                                    {!currentBatch ? (
+                                        <button
+                                            onClick={handleBatchUpload}
+                                            disabled={uploadedFiles.length === 0 || isUploading}
+                                            className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isUploading ? (
+                                                <>
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload className="h-4 w-4 mr-2" />
+                                                    Upload Batch ({uploadedFiles.length})
+                                                </>
+                                            )}
+                                        </button>
+                                    ) : (
+                                        !autoProcess && (
+                                            <button
+                                                onClick={handleManualProcess}
+                                                disabled={isUploading}
+                                                className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                                            >
+                                                {isUploading ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                        Processing...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <FileText className="h-4 w-4 mr-2" />
+                                                        Process Documents
+                                                    </>
+                                                )}
+                                            </button>
+                                        )
+                                    )}
                                 </div>
-                                {!selectedTemplate && (
-                                    <p className="text-sm text-red-600 mt-2 text-right">
-                                        Please select a template before processing
-                                    </p>
-                                )}
                             </div>
                         )}
                     </div>
