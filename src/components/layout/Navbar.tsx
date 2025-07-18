@@ -62,7 +62,7 @@ export default function Navbar() {
                                 Dashboard
                             </Link>
                             <Link
-                                href="/patients"
+                                href="/main/patient"
                                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
                             >
                                 Patients
