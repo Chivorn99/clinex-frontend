@@ -51,7 +51,7 @@ interface ProcessedReport {
     fileName: string
     status: 'processing' | 'completed' | 'verified' | 'error'
     processingProgress: number
-    pdfUrl: string
+    pdfUrl: string // Will be updated dynamically with data URL
     patientInfo: PatientInfo
     labInfo: LabInfo
     testResults: TestResult[]
@@ -81,6 +81,9 @@ export default function VerificationPage() {
     const [processingAnimation, setProcessingAnimation] = useState(true)
     const [batchInfo, setBatchInfo] = useState<BatchInfo | null>(null)
     const [error, setError] = useState('')
+    const [pdfDataUrl, setPdfDataUrl] = useState<string>('')
+    const [pdfLoading, setPdfLoading] = useState(false)
+    const [pdfError, setPdfError] = useState('')
 
     // Modal states
     const [showCategoryModal, setShowCategoryModal] = useState(false)
@@ -117,16 +120,47 @@ export default function VerificationPage() {
 
     useEffect(() => {
         if (reportId) {
-            // Single report verification mode
             fetchSingleReport(reportId)
         } else if (batchId) {
-            // Batch verification mode
             fetchBatchReports()
         } else {
-            // Fallback to mock data
             fetchAllReports()
         }
     }, [batchId, reportId])
+
+    const fetchPdfData = async (reportId: string) => {
+        try {
+            setPdfLoading(true)
+            setPdfError('')
+
+            console.log('🚀 Fetching PDF data for report ID:', reportId)
+            const response = await apiClient.get(`/${reportId}/pdf-data`)
+            console.log('✅ PDF API Response:', response)
+
+            if (response.success && response.data?.base64_content) {
+                const base64 = response.data.base64_content
+                const dataUrl = `data:application/pdf;base64,${base64}`
+                setPdfDataUrl(dataUrl)
+            } else {
+                throw new Error('Invalid PDF response structure')
+            }
+        } catch (err: any) {
+            console.error('💥 Failed to fetch PDF data:', err)
+            let errorMessage = 'Failed to load PDF preview'
+
+            if (err.status === 404) {
+                errorMessage = 'PDF file not found'
+            } else if (err.status === 401) {
+                errorMessage = 'Authentication failed. Please log in again.'
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            setPdfError(errorMessage)
+        } finally {
+            setPdfLoading(false)
+        }
+    }
 
     const fetchSingleReport = async (id: string) => {
         try {
@@ -145,13 +179,14 @@ export default function VerificationPage() {
                 console.log('📊 Lab Report Data:', labReport)
                 console.log('📋 Extracted Data:', extractedData)
 
-                // Transform single report to our format
                 const transformedReport = transformLabReportToProcessedReport(labReport, extractedData)
 
                 setReports([transformedReport])
                 setSelectedReport(transformedReport)
 
-                // Set batch info if available
+                // Fetch PDF data for the selected report
+                await fetchPdfData(id)
+
                 if (labReport.batch) {
                     setBatchInfo({
                         id: labReport.batch.id,
@@ -164,7 +199,6 @@ export default function VerificationPage() {
             } else {
                 throw new Error('Invalid response structure')
             }
-
         } catch (err: any) {
             console.error('💥 Failed to fetch single report:', err)
             handleFetchError(err, `report ${id}`)
@@ -190,10 +224,8 @@ export default function VerificationPage() {
                 throw new Error('Invalid API response structure')
             }
 
-            // Set batch info
             setBatchInfo(apiResponse.batch)
 
-            // Transform reports
             const reportsData = apiResponse.reports_to_verify.data
             const transformedReports = reportsData.map((report: any) =>
                 transformLabReportToProcessedReport(report, report.extracted_data)
@@ -201,16 +233,17 @@ export default function VerificationPage() {
 
             setReports(transformedReports)
 
-            // Select first report or the one specified in URL
             if (transformedReports.length > 0) {
                 const targetReport = reportId
                     ? transformedReports.find((r: ProcessedReport) => r.id === reportId)
                     : transformedReports[0]
                 setSelectedReport(targetReport || transformedReports[0])
+                if (targetReport) {
+                    await fetchPdfData(targetReport.id)
+                }
             }
 
             console.log('✅ Batch reports loaded successfully')
-
         } catch (err: any) {
             console.error('💥 Failed to fetch batch reports:', err)
             handleFetchError(err, `batch ${batchId}`)
@@ -228,8 +261,7 @@ export default function VerificationPage() {
             fileName: labReport.original_filename || `Report ${labReport.id}`,
             status: labReport.status === 'verified' ? 'verified' as const : 'completed' as const,
             processingProgress: 100,
-            // Use the actual backend route for PDF viewing
-            pdfUrl: `http://localhost:8000/api/lab-reports/${labReport.id}`,
+            pdfUrl: '', // Placeholder, will be set dynamically via fetchPdfData
             patientInfo: {
                 name: extractedData?.patientInfo?.name || '',
                 patientId: extractedData?.patientInfo?.patientId || '',
@@ -252,7 +284,6 @@ export default function VerificationPage() {
                 result: test.result || '',
                 unit: test.unit || '',
                 referenceRange: test.referenceRange || '',
-                // Map backend flags to frontend format
                 flag: mapBackendFlag(test.flag)
             })),
             extracted_data: extractedData,
@@ -422,7 +453,6 @@ export default function VerificationPage() {
         try {
             console.log('🚀 Starting verification submission for report:', selectedReport.id)
 
-            // Prepare the verified data in the format expected by the API
             const verifiedData = {
                 verified_data: {
                     patientInfo: {
@@ -446,7 +476,7 @@ export default function VerificationPage() {
                         result: test.result,
                         unit: test.unit,
                         referenceRange: test.referenceRange,
-                        flag: mapFrontendFlag(test.flag) // Convert to backend format (H, L, or null)
+                        flag: mapFrontendFlag(test.flag)
                     }))
                 },
                 notes: `Verified by ${currentUser.name} on ${new Date().toLocaleDateString()}`
@@ -454,7 +484,6 @@ export default function VerificationPage() {
 
             console.log('📦 Sending verification data:', verifiedData)
 
-            // Submit to API
             const response = await apiClient.post(`/lab-reports/${selectedReport.id}/verify`, verifiedData)
 
             console.log('✅ Verification API Response:', response)
@@ -462,7 +491,6 @@ export default function VerificationPage() {
             if (response.success) {
                 console.log('🎉 Report verified successfully!')
 
-                // Update the local state to reflect the verification
                 const updatedReport = {
                     ...selectedReport,
                     status: 'verified' as const
@@ -471,35 +499,30 @@ export default function VerificationPage() {
                 setSelectedReport(updatedReport)
                 setReports(prev => prev.map(r => r.id === selectedReport.id ? updatedReport : r))
 
-                // Navigate based on context
                 if (batchId) {
-                    // Check if there are more reports to verify
                     const remainingReports = reports.filter(r =>
                         r.id !== selectedReport.id && r.status === 'completed'
                     )
 
                     if (remainingReports.length > 0) {
-                        // Auto-select next unverified report
                         setSelectedReport(remainingReports[0])
                         console.log('👆 Auto-selected next report for verification:', remainingReports[0].fileName)
 
-                        // Update URL to reflect the new report
                         const newUrl = `/main/verification?batchId=${batchId}&reportId=${remainingReports[0].id}`
                         window.history.replaceState(null, '', newUrl)
+
+                        // Fetch PDF for the next report
+                        await fetchPdfData(remainingReports[0].id)
                     } else {
-                        // All reports in batch are verified
                         console.log('🏁 All reports in batch verified')
                         router.push('/main/verification/monitoring')
                     }
                 } else {
-                    // Single report verification - go back to reports list
                     router.push('/main/reports?status=verified')
                 }
-
             } else {
                 throw new Error(response.message || 'Verification failed')
             }
-
         } catch (err: any) {
             console.error('💥 Verification submission failed:', err)
 
@@ -524,7 +547,6 @@ export default function VerificationPage() {
 
             alert(`Verification Error: ${errorMessage}`)
             setError(errorMessage)
-
         } finally {
             setIsSubmitting(false)
         }
@@ -538,13 +560,11 @@ export default function VerificationPage() {
         try {
             console.log('💾 Saving report for later verification:', selectedReport.id)
 
-            // Navigate back based on context
             if (batchId) {
                 router.push('/main/verification/monitoring')
             } else {
                 router.push('/main/reports?status=processed')
             }
-
         } catch (err: any) {
             console.error('💥 Failed to save for later:', err)
             alert('Failed to save report for later verification')
@@ -553,13 +573,12 @@ export default function VerificationPage() {
         }
     }
 
-    // Update the flag field in test results to use the correct options
     const renderFlagDropdown = (test: TestResult) => (
         <select
             value={test.flag || ''}
             onChange={(e) => {
-                const value = e.target.value === '' ? null : e.target.value;
-                updateTestResult(test.id, 'flag', value as TestResult['flag']);
+                const value = e.target.value === '' ? null : e.target.value
+                updateTestResult(test.id, 'flag', value as TestResult['flag'])
             }}
             className="block w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
         >
@@ -569,16 +588,14 @@ export default function VerificationPage() {
         </select>
     )
 
-    // Update the existing fetchAllReports function
     const fetchAllReports = () => {
-        // Existing mock data logic for when no batch or report is specified
         const mockReports: ProcessedReport[] = [
             {
                 id: 'rpt_001',
                 fileName: 'lab_report_john_doe.pdf',
                 status: 'completed',
                 processingProgress: 100,
-                pdfUrl: 'http://localhost:8000/api/lab-reports/1', // Use actual backend route
+                pdfUrl: '', // Placeholder for mock data
                 patientInfo: {
                     name: "សាន សេងយាន",
                     patientId: "PT001871",
@@ -615,6 +632,9 @@ export default function VerificationPage() {
             const firstCompleted = mockReports.find(r => r.status === 'completed')
             if (firstCompleted) {
                 setSelectedReport(firstCompleted)
+                // Skip PDF fetching for mock data
+                setPdfDataUrl('')
+                setPdfError('PDF preview not available for mock data')
             }
         }, 3000)
     }
@@ -628,10 +648,8 @@ export default function VerificationPage() {
                         <button
                             onClick={() => {
                                 if (reportId && !batchId) {
-                                    // Single report mode - go back to reports list
                                     router.push('/main/reports')
                                 } else {
-                                    // Batch mode - go back to monitoring
                                     router.push('/main/verification/monitoring')
                                 }
                             }}
@@ -707,8 +725,8 @@ export default function VerificationPage() {
                             </div>
                             <div className="flex-shrink-0">
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${batchInfo.status === 'completed'
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-yellow-100 text-yellow-800'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
                                     }`}>
                                     {batchInfo.status}
                                 </span>
@@ -729,7 +747,12 @@ export default function VerificationPage() {
                                 {reports.map((report) => (
                                     <div
                                         key={report.id}
-                                        onClick={() => report.status === 'completed' && setSelectedReport(report)}
+                                        onClick={() => {
+                                            if (report.status === 'completed') {
+                                                setSelectedReport(report)
+                                                fetchPdfData(report.id)
+                                            }
+                                        }}
                                         className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedReport?.id === report.id
                                             ? 'border-blue-300 bg-blue-50'
                                             : report.status === 'completed'
@@ -764,7 +787,6 @@ export default function VerificationPage() {
                                                 ></div>
                                             </div>
                                         )}
-                                        {/* Show uploader info if available */}
                                         {report.uploader && (
                                             <div className="mt-2 text-xs text-gray-500">
                                                 Uploaded by: {report.uploader.name}
@@ -980,24 +1002,39 @@ export default function VerificationPage() {
                             </div>
                             <div className="p-4">
                                 {selectedReport ? (
-                                    <>
-                                        <div className={`${isPreviewExpanded ? 'h-96' : 'h-64'} transition-all duration-300`}>
-                                            <iframe
-                                                src={selectedReport.pdfUrl}
-                                                className="w-full h-full rounded-md border border-gray-200"
-                                                title="PDF Preview"
-                                            />
+                                    pdfLoading ? (
+                                        <div className="flex items-center justify-center h-64">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                            <span className="ml-3 text-gray-600">Loading PDF...</span>
                                         </div>
-                                        <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
-                                            <span>{selectedReport.fileName}</span>
-                                            <button
-                                                onClick={() => window.open(selectedReport.pdfUrl, '_blank')}
-                                                className="text-blue-600 hover:text-blue-800 font-medium"
-                                            >
-                                                Open Full PDF
-                                            </button>
+                                    ) : pdfError ? (
+                                        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
+                                            <div className="text-center">
+                                                <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                                <p className="text-sm text-red-600">{pdfError}</p>
+                                            </div>
                                         </div>
-                                    </>
+                                    ) : (
+                                        <>
+                                            <div className={`${isPreviewExpanded ? 'h-96' : 'h-64'} transition-all duration-300`}>
+                                                <iframe
+                                                    src={pdfDataUrl}
+                                                    className="w-full h-full rounded-md border border-gray-200"
+                                                    title="PDF Preview"
+                                                />
+                                            </div>
+                                            <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
+                                                <span>{selectedReport.fileName}</span>
+                                                <button
+                                                    onClick={() => window.open(pdfDataUrl, '_blank')}
+                                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                                    disabled={!pdfDataUrl}
+                                                >
+                                                    Open Full PDF
+                                                </button>
+                                            </div>
+                                        </>
+                                    )
                                 ) : (
                                     <div className="h-64 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
                                         <div className="text-center">
@@ -1015,17 +1052,12 @@ export default function VerificationPage() {
                 {showCategoryModal && (
                     <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                            {/* Background overlay */}
                             <div
                                 className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
                                 aria-hidden="true"
                                 onClick={() => setShowCategoryModal(false)}
                             ></div>
-
-                            {/* This element is to trick the browser into centering the modal contents. */}
-                            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                            {/* Modal panel */}
+                            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true"></span>
                             <div className="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
                                 <div className="sm:flex sm:items-start">
                                     <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
