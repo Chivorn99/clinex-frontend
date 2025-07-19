@@ -1016,7 +1016,7 @@ export default function VerificationPage() {
                                         </div>
                                     ) : (
                                         <>
-                                            <div className={`${isPreviewExpanded ? 'h-96' : 'h-64'} transition-all duration-300`}>
+                                            <div className={`${isPreviewExpanded ? 'h-[1200px] w-[900px]' : 'h-[600px] w-[500px]'} mx-auto transition-all duration-300`}>
                                                 <iframe
                                                     src={pdfDataUrl}
                                                     className="w-full h-full rounded-md border border-gray-200"
