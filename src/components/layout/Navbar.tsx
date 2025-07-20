@@ -74,10 +74,16 @@ export default function Navbar() {
                                 Reports
                             </Link>
                             <Link
+                                href="/main/verification/monitoring"
+                                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
+                            >
+                                Batch
+                            </Link>
+                            <Link
                                 href="/main/analytics"
                                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors duration-200"
                             >
-                                Analytic
+                                Information
                             </Link>
                             <Link
                                 href="/main/upload"
@@ -90,10 +96,6 @@ export default function Navbar() {
 
                     {/* Right side - Notifications and Profile */}
                     <div className="flex items-center">
-                        {/* Notifications */}
-                        <button className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
-                            <Bell className="h-6 w-6" />
-                        </button>
 
                         {/* Profile Dropdown */}
                         <div className="ml-3 relative">
@@ -123,13 +125,13 @@ export default function Navbar() {
                                             <User className="h-4 w-4 mr-3" />
                                             Profile
                                         </Link>
-                                        <Link
+                                        {/* <Link
                                             href="/settings"
                                             className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                                         >
                                             <Settings className="h-4 w-4 mr-3" />
                                             Settings
-                                        </Link>
+                                        </Link> */}
                                         <button
                                             onClick={handleLogout}
                                             disabled={isLoggingOut}

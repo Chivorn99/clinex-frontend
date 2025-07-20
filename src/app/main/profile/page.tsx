@@ -9,7 +9,7 @@ import { apiClient } from '@/lib/api'
 export default function ProfilePage() {
     const { user: authUser } = useAuth()
     const [isEditing, setIsEditing] = useState(false)
-    const [activeTab, setActiveTab] = useState<'profile' | 'clinic' | 'security' | 'notifications'>('profile')
+    const [activeTab, setActiveTab] = useState<'profile' | 'clinic' | 'security'>('profile')
     const [loading, setLoading] = useState(true)
 
     const [userData, setUserData] = useState({
@@ -92,12 +92,6 @@ export default function ProfilePage() {
         sessionTimeout: '30'
     })
 
-    const [notificationSettings, setNotificationSettings] = useState({
-        emailReports: true,
-        smsAlerts: false,
-        pushNotifications: true,
-        weeklyDigest: true
-    })
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
@@ -221,7 +215,6 @@ export default function ProfilePage() {
                                 { key: 'profile', label: 'Personal Info', icon: User },
                                 // { key: 'clinic', label: 'Clinic Details', icon: Building2 },
                                 { key: 'security', label: 'Security', icon: Shield },
-                                { key: 'notifications', label: 'Notifications', icon: Bell }
                             ].map((tab) => {
                                 const Icon = tab.icon
                                 return (
@@ -407,156 +400,6 @@ export default function ProfilePage() {
                                                 Change Password
                                             </Link>
                                         </div>
-                                    </div>
-
-                                    {/* Existing security settings */}
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                Two-Factor Authentication
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Add an extra layer of security to your account
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setSecuritySettings({ ...securitySettings, twoFactorEnabled: !securitySettings.twoFactorEnabled })}
-                                            className={`${securitySettings.twoFactorEnabled ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${securitySettings.twoFactorEnabled ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                Login Notifications
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Get notified when someone logs into your account
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setSecuritySettings({ ...securitySettings, loginNotifications: !securitySettings.loginNotifications })}
-                                            className={`${securitySettings.loginNotifications ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${securitySettings.loginNotifications ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Session Timeout (minutes)
-                                        </label>
-                                        <select
-                                            value={securitySettings.sessionTimeout}
-                                            onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: e.target.value })}
-                                            className="block w-full px-3 py-2 text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                        >
-                                            <option value="15">15 minutes</option>
-                                            <option value="30">30 minutes</option>
-                                            <option value="60">1 hour</option>
-                                            <option value="120">2 hours</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Notifications Tab */}
-                        {activeTab === 'notifications' && (
-                            <div className="space-y-6">
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                Email Reports
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Receive daily and weekly report summaries via email
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setNotificationSettings({ ...notificationSettings, emailReports: !notificationSettings.emailReports })}
-                                            className={`${notificationSettings.emailReports ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${notificationSettings.emailReports ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                SMS Alerts
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Get urgent notifications via SMS
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setNotificationSettings({ ...notificationSettings, smsAlerts: !notificationSettings.smsAlerts })}
-                                            className={`${notificationSettings.smsAlerts ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${notificationSettings.smsAlerts ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                Push Notifications
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Browser notifications for real-time updates
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setNotificationSettings({ ...notificationSettings, pushNotifications: !notificationSettings.pushNotifications })}
-                                            className={`${notificationSettings.pushNotifications ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${notificationSettings.pushNotifications ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-900">
-                                                Weekly Digest
-                                            </label>
-                                            <p className="text-sm text-gray-500">
-                                                Weekly summary of activity and reports
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setNotificationSettings({ ...notificationSettings, weeklyDigest: !notificationSettings.weeklyDigest })}
-                                            className={`${notificationSettings.weeklyDigest ? 'bg-blue-600' : 'bg-gray-200'
-                                                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
-                                        >
-                                            <span
-                                                className={`${notificationSettings.weeklyDigest ? 'translate-x-5' : 'translate-x-0'
-                                                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                                            />
-                                        </button>
                                     </div>
                                 </div>
                             </div>

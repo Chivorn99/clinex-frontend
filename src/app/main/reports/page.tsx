@@ -125,7 +125,7 @@ export default function ReportsPage() {
                     batchId: batchId,
                     extractedData: report.extracted_data,
                     verifiedBy: report.verified_by || undefined,
-                    priority: 'medium', // Default priority, you can extract this if available
+                    priority: 'medium',
                     original_filename: report.original_filename,
                     uploader: report.uploader,
                     created_at: report.created_at,
@@ -456,10 +456,6 @@ export default function ReportsPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Export
-                                </button>
                             </div>
                         </div>
                     )}
@@ -488,9 +484,9 @@ export default function ReportsPage() {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Processed Date
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Actions
-                                        </th>
+                                        </th> */}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -528,7 +524,7 @@ export default function ReportsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {formatDate(report.processedDate)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            {/* <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
                                                     <button
                                                         onClick={(e) => {
@@ -548,7 +544,7 @@ export default function ReportsPage() {
                                                         <Download className="h-4 w-4" />
                                                     </button>
                                                 </div>
-                                            </td>
+                                            </td> */}
                                         </tr>
                                     ))}
                                 </tbody>

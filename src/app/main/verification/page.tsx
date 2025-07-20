@@ -2,19 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import {
-    ArrowLeft,
-    FileText,
-    User,
-    Eye,
-    Maximize,
-    Minimize,
-    CheckCircle,
-    Clock as ClockIcon,
-    Plus,
-    Trash2,
-    AlertTriangle
-} from 'lucide-react'
+import {ArrowLeft,FileText,User,Eye,Maximize,Minimize,CheckCircle,Clock as ClockIcon,Plus,Trash2,AlertTriangle} from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { apiClient } from '@/lib/api'
 
@@ -259,9 +247,10 @@ export default function VerificationPage() {
         const transformed = {
             id: labReport.id.toString(),
             fileName: labReport.original_filename || `Report ${labReport.id}`,
-            status: labReport.status === 'verified' ? 'verified' as const : 'completed' as const,
+            status: labReport.status === 'verified' ? 'verified' as const : 
+                    labReport.status === 'processed' ? 'completed' as const : 'completed' as const,
             processingProgress: 100,
-            pdfUrl: '', // Placeholder, will be set dynamically via fetchPdfData
+            pdfUrl: '', 
             patientInfo: {
                 name: extractedData?.patientInfo?.name || '',
                 patientId: extractedData?.patientInfo?.patientId || '',
@@ -735,71 +724,79 @@ export default function VerificationPage() {
                     </div>
                 )}
 
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-                    {/* Reports List - Left Sidebar */}
-                    <div className="xl:col-span-1">
-                        <div className="bg-white shadow rounded-lg">
+                {/* Main Content Grid - Redesigned Layout */}
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    {/* PDF Preview - Left Side */}
+                    <div className="xl:col-span-5">
+                        <div className="bg-white shadow rounded-lg sticky top-6">
                             <div className="px-6 py-4 border-b border-gray-200">
-                                <h3 className="text-lg font-medium text-gray-900">Reports ({reports.length})</h3>
-                            </div>
-                            <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
-                                {reports.map((report) => (
-                                    <div
-                                        key={report.id}
-                                        onClick={() => {
-                                            if (report.status === 'completed') {
-                                                setSelectedReport(report)
-                                                fetchPdfData(report.id)
-                                            }
-                                        }}
-                                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedReport?.id === report.id
-                                            ? 'border-blue-300 bg-blue-50'
-                                            : report.status === 'completed'
-                                                ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                                : 'border-gray-200 bg-gray-50 cursor-not-allowed'
-                                            }`}
-                                    >
-                                        <div className="flex items-center space-x-2">
-                                            <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                            <span className="text-sm font-medium text-gray-900 truncate">
-                                                {report.fileName}
-                                            </span>
-                                        </div>
-                                        <div className="mt-2 flex items-center justify-between">
-                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${report.status === 'completed'
-                                                ? 'bg-green-100 text-green-800'
-                                                : report.status === 'processing'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-gray-100 text-gray-800'
-                                                }`}>
-                                                {report.status}
-                                            </span>
-                                            {report.status === 'processing' && (
-                                                <span className="text-xs text-gray-500">{report.processingProgress}%</span>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                                        <Eye className="h-5 w-5 mr-2 text-orange-600" />
+                                        PDF Preview
+                                    </h3>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => window.open(pdfDataUrl, '_blank')}
+                                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                            disabled={!pdfDataUrl}
+                                        >
+                                            Open Full PDF
+                                        </button>
+                                        <button
+                                            onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
+                                            className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1"
+                                            title={isPreviewExpanded ? "Minimize" : "Expand"}
+                                        >
+                                            {isPreviewExpanded ? (
+                                                <Minimize className="h-4 w-4" />
+                                            ) : (
+                                                <Maximize className="h-4 w-4" />
                                             )}
-                                        </div>
-                                        {report.status === 'processing' && (
-                                            <div className="mt-2 w-full bg-gray-200 rounded-full h-1">
-                                                <div
-                                                    className="bg-yellow-600 h-1 rounded-full transition-all duration-300"
-                                                    style={{ width: `${report.processingProgress}%` }}
-                                                ></div>
-                                            </div>
-                                        )}
-                                        {report.uploader && (
-                                            <div className="mt-2 text-xs text-gray-500">
-                                                Uploaded by: {report.uploader.name}
-                                            </div>
-                                        )}
+                                        </button>
                                     </div>
-                                ))}
+                                </div>
+                                {selectedReport && (
+                                    <p className="text-sm text-gray-500 mt-1">{selectedReport.fileName}</p>
+                                )}
+                            </div>
+                            <div className="p-4">
+                                {selectedReport ? (
+                                    pdfLoading ? (
+                                        <div className="flex items-center justify-center h-96">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                            <span className="ml-3 text-gray-600">Loading PDF...</span>
+                                        </div>
+                                    ) : pdfError ? (
+                                        <div className="h-96 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
+                                            <div className="text-center">
+                                                <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                                <p className="text-sm text-red-600">{pdfError}</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className={`${isPreviewExpanded ? 'h-[800px]' : 'h-[700px]'} transition-all duration-300`}>
+                                            <iframe
+                                                src={pdfDataUrl}
+                                                className="w-full h-full rounded-md border border-gray-200 shadow-sm"
+                                                title="PDF Preview"
+                                            />
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="h-96 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
+                                        <div className="text-center">
+                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                            <p className="text-sm text-gray-500">Select a report to preview</p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Content Area */}
-                    <div className="xl:col-span-2">
+                    {/* Main Content Area - Middle */}
+                    <div className="xl:col-span-5">
                         {selectedReport ? (
                             <div className="space-y-6">
                                 {/* Patient Information */}
@@ -978,71 +975,63 @@ export default function VerificationPage() {
                         )}
                     </div>
 
-                    {/* PDF Preview - Right Sidebar */}
-                    <div className="xl:col-span-1">
-                        <div className="bg-white shadow rounded-lg sticky top-6">
+                    {/* Reports List - Right Side */}
+                    <div className="xl:col-span-2">
+                        <div className="bg-white shadow rounded-lg">
                             <div className="px-6 py-4 border-b border-gray-200">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                                        <Eye className="h-5 w-5 mr-2 text-orange-600" />
-                                        PDF Preview
-                                    </h3>
-                                    <button
-                                        onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
-                                        className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md p-1"
-                                        title={isPreviewExpanded ? "Minimize" : "Expand"}
-                                    >
-                                        {isPreviewExpanded ? (
-                                            <Minimize className="h-4 w-4" />
-                                        ) : (
-                                            <Maximize className="h-4 w-4" />
-                                        )}
-                                    </button>
-                                </div>
+                                <h3 className="text-lg font-medium text-gray-900">Reports ({reports.length})</h3>
                             </div>
-                            <div className="p-4">
-                                {selectedReport ? (
-                                    pdfLoading ? (
-                                        <div className="flex items-center justify-center h-64">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                                            <span className="ml-3 text-gray-600">Loading PDF...</span>
+                            <div className="p-4 space-y-3 max-h-[700px] overflow-y-auto">
+                                {reports.map((report) => (
+                                    <div
+                                        key={report.id}
+                                        onClick={() => {
+                                            if (report.status === 'completed') {
+                                                setSelectedReport(report)
+                                                fetchPdfData(report.id)
+                                            }
+                                        }}
+                                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedReport?.id === report.id
+                                            ? 'border-blue-300 bg-blue-50'
+                                            : report.status === 'completed'
+                                                ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                                : 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        <div className="flex items-center space-x-2">
+                                            <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                            <span className="text-sm font-medium text-gray-900 truncate">
+                                                {report.fileName}
+                                            </span>
                                         </div>
-                                    ) : pdfError ? (
-                                        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
-                                            <div className="text-center">
-                                                <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                                                <p className="text-sm text-red-600">{pdfError}</p>
-                                            </div>
+                                        <div className="mt-2 flex items-center justify-between">
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${report.status === 'completed'
+                                                ? 'bg-green-100 text-green-800'
+                                                : report.status === 'processing'
+                                                    ? 'bg-yellow-100 text-yellow-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {report.status}
+                                            </span>
+                                            {report.status === 'processing' && (
+                                                <span className="text-xs text-gray-500">{report.processingProgress}%</span>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className={`${isPreviewExpanded ? 'h-[1200px] w-[900px]' : 'h-[600px] w-[500px]'} mx-auto transition-all duration-300`}>
-                                                <iframe
-                                                    src={pdfDataUrl}
-                                                    className="w-full h-full rounded-md border border-gray-200"
-                                                    title="PDF Preview"
-                                                />
+                                        {report.status === 'processing' && (
+                                            <div className="mt-2 w-full bg-gray-200 rounded-full h-1">
+                                                <div
+                                                    className="bg-yellow-600 h-1 rounded-full transition-all duration-300"
+                                                    style={{ width: `${report.processingProgress}%` }}
+                                                ></div>
                                             </div>
-                                            <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
-                                                <span>{selectedReport.fileName}</span>
-                                                <button
-                                                    onClick={() => window.open(pdfDataUrl, '_blank')}
-                                                    className="text-blue-600 hover:text-blue-800 font-medium"
-                                                    disabled={!pdfDataUrl}
-                                                >
-                                                    Open Full PDF
-                                                </button>
+                                        )}
+                                        {report.uploader && (
+                                            <div className="mt-2 text-xs text-gray-500">
+                                                Uploaded by: {report.uploader.name}
                                             </div>
-                                        </>
-                                    )
-                                ) : (
-                                    <div className="h-64 flex items-center justify-center bg-gray-50 rounded-md border border-gray-200">
-                                        <div className="text-center">
-                                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                                            <p className="text-sm text-gray-500">Select a report to preview</p>
-                                        </div>
+                                        )}
                                     </div>
-                                )}
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -1059,19 +1048,19 @@ export default function VerificationPage() {
                             ></div>
                             <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true"></span>
                             <div className="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-                                <div className="sm:flex sm:items-start">
-                                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
+                                    <div className="sm:flex sm:items-start">
+                                        <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
                                         <Plus className="h-6 w-6 text-blue-600" aria-hidden="true" />
-                                    </div>
+                                        </div>
                                     <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                                         <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                                            Add New Category
-                                        </h3>
-                                        <div className="mt-2">
-                                            <p className="text-sm text-gray-500">
+                                                Add New Category
+                                            </h3>
+                                            <div className="mt-2">
+                                                <p className="text-sm text-gray-500">
                                                 Enter a name for the new test results category.
-                                            </p>
-                                        </div>
+                                                </p>
+                                            </div>
                                         <div className="mt-4">
                                             <input
                                                 type="text"
@@ -1086,8 +1075,8 @@ export default function VerificationPage() {
                                                 }}
                                             />
                                         </div>
+                                        </div>
                                     </div>
-                                </div>
                                 <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                                     <button
                                         type="button"

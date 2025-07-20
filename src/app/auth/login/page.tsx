@@ -146,18 +146,6 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            New to Clinex?{' '}
-            <Link
-              href="/auth/signup"
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              Create your clinic account
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   )

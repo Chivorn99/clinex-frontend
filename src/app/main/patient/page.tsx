@@ -2,25 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import {
-    User,
-    Phone,
-    Calendar,
-    FileText,
-    Search,
-    Filter,
-    Eye,
-    ChevronRight,
-    Users,
-    Activity,
-    Clock,
-    UserCheck,
-    Download,
-    RefreshCw,
-    AlertCircle,
-    CheckCircle,
-    XCircle
-} from 'lucide-react'
+import {User,Phone,Calendar,FileText,Search,Filter,Eye,ChevronRight,Users,Activity,Clock,UserCheck,Download,RefreshCw,AlertCircle,CheckCircle,XCircle} from 'lucide-react'
 import { apiClient } from '@/lib/api'
 
 // Interfaces
@@ -333,8 +315,8 @@ export default function PatientPage() {
                                     key={page}
                                     onClick={() => onPageChange(page)}
                                     className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${page === current_page
-                                            ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                                            : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                                        ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
                                         }`}
                                 >
                                     {page}
@@ -662,28 +644,28 @@ export default function PatientPage() {
                                             {/* Patient Info */}
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                                                 <div className="bg-gray-50 rounded-lg p-4">
-                                                    <h4 className="text-sm font-medium text-gray-500 mb-2">Personal Information</h4>
+                                                    <h4 className="text-sm font-medium text-gray-700 mb-2">Personal Information</h4>
                                                     <div className="space-y-2 text-sm">
-                                                        <div><span className="font-medium">Age:</span> {selectedPatient.age}</div>
-                                                        <div><span className="font-medium">Gender:</span> {selectedPatient.gender}</div>
-                                                        <div><span className="font-medium">Phone:</span> {selectedPatient.phone || 'Not provided'}</div>
-                                                        <div><span className="font-medium">Email:</span> {selectedPatient.email || 'Not provided'}</div>
+                                                        <div><span className="font-medium text-gray-700">Age:</span> <span className="text-gray-900">{selectedPatient.age}</span></div>
+                                                        <div><span className="font-medium text-gray-700">Gender:</span> <span className="text-gray-900">{selectedPatient.gender}</span></div>
+                                                        <div><span className="font-medium text-gray-700">Phone:</span> <span className="text-gray-900">{selectedPatient.phone || 'Not provided'}</span></div>
+                                                        <div><span className="font-medium text-gray-700">Email:</span> <span className="text-gray-900">{selectedPatient.email || 'Not provided'}</span></div>
                                                     </div>
                                                 </div>
 
                                                 <div className="bg-gray-50 rounded-lg p-4">
-                                                    <h4 className="text-sm font-medium text-gray-500 mb-2">Account Information</h4>
+                                                    <h4 className="text-sm font-medium text-gray-700 mb-2">Account Information</h4>
                                                     <div className="space-y-2 text-sm">
-                                                        <div><span className="font-medium">Created:</span> {formatDate(selectedPatient.created_at)}</div>
-                                                        <div><span className="font-medium">Updated:</span> {formatDate(selectedPatient.updated_at)}</div>
+                                                        <div><span className="font-medium text-gray-700">Created:</span> <span className="text-gray-900">{formatDate(selectedPatient.created_at)}</span></div>
+                                                        <div><span className="font-medium text-gray-700">Updated:</span> <span className="text-gray-900">{formatDate(selectedPatient.updated_at)}</span></div>
                                                     </div>
                                                 </div>
 
                                                 <div className="bg-gray-50 rounded-lg p-4">
-                                                    <h4 className="text-sm font-medium text-gray-500 mb-2">Lab Reports Summary</h4>
+                                                    <h4 className="text-sm font-medium text-gray-700 mb-2">Lab Reports Summary</h4>
                                                     <div className="space-y-2 text-sm">
-                                                        <div><span className="font-medium">Total Reports:</span> {selectedPatient.lab_reports_count}</div>
-                                                        <div><span className="font-medium">Latest Report:</span> {formatDate(selectedPatient.latest_report_date)}</div>
+                                                        <div><span className="font-medium text-gray-700">Total Reports:</span> <span className="text-gray-900">{selectedPatient.lab_reports_count}</span></div>
+                                                        <div><span className="font-medium text-gray-700">Latest Report:</span> <span className="text-gray-900">{formatDate(selectedPatient.latest_report_date)}</span></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -730,12 +712,12 @@ export default function PatientPage() {
                                                                 {/* Lab Info */}
                                                                 {report.extracted_lab_info && (
                                                                     <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                                                                        <h6 className="text-xs font-medium text-gray-500 mb-2">LAB INFORMATION</h6>
+                                                                        <h6 className="text-xs font-medium text-gray-700 mb-2">LAB INFORMATION</h6>
                                                                         <div className="grid grid-cols-2 gap-2 text-xs">
-                                                                            <div><span className="font-medium">Lab ID:</span> {report.extracted_lab_info.lab_id}</div>
-                                                                            <div><span className="font-medium">Requested By:</span> {report.extracted_lab_info.requested_by}</div>
-                                                                            <div><span className="font-medium">Collected:</span> {formatDate(report.extracted_lab_info.collected_date)}</div>
-                                                                            <div><span className="font-medium">Analyzed:</span> {formatDate(report.extracted_lab_info.analysis_date)}</div>
+                                                                            <div><span className="font-medium text-gray-700">Lab ID:</span> <span className="text-gray-900">{report.extracted_lab_info.lab_id}</span></div>
+                                                                            <div><span className="font-medium text-gray-700">Requested By:</span> <span className="text-gray-900">{report.extracted_lab_info.requested_by}</span></div>
+                                                                            <div><span className="font-medium text-gray-700">Collected:</span> <span className="text-gray-900">{formatDate(report.extracted_lab_info.collected_date)}</span></div>
+                                                                            <div><span className="font-medium text-gray-700">Analyzed:</span> <span className="text-gray-900">{formatDate(report.extracted_lab_info.analysis_date)}</span></div>
                                                                         </div>
                                                                     </div>
                                                                 )}

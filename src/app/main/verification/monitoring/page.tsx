@@ -89,7 +89,7 @@ type VerificationResponse = WrappedVerificationResponse | LaravelPaginationRespo
 
 export default function VerificationPage() {
     const router = useRouter()
-    
+
     const [reportsForVerification, setReportsForVerification] = useState<ReportForVerification[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -103,7 +103,7 @@ export default function VerificationPage() {
 
     useEffect(() => {
         fetchReportsForVerification()
-        
+
         // Set up polling for real-time updates
         let interval: NodeJS.Timeout
         if (autoRefresh) {
@@ -132,23 +132,23 @@ export default function VerificationPage() {
                 page: currentPage.toString(),
                 per_page: '50' // Get more results to show all batches
             })
-            
+
             // Add search filter if provided
             if (searchTerm) {
                 params.append('search', searchTerm)
             }
-            
+
             // Add batch filter if selected
             if (selectedBatch) {
                 params.append('batch_id', selectedBatch)
             }
-            
+
             const response = await apiClient.get(`/reports-for-verification?${params.toString()}`)
-            
+
             console.log('API Response:', response.data)
-            
+
             const responseData = response.data
-            
+
             if (isWrappedResponse(responseData)) {
                 // WrappedVerificationResponse
                 setReportsForVerification(responseData.data.data || [])
@@ -165,13 +165,13 @@ export default function VerificationPage() {
                 setTotalPages(1)
                 setTotalPending(0)
             }
-            
+
             setError('')
         } catch (err: any) {
             console.error('Failed to fetch reports for verification:', err)
             console.error('Error response:', err.response?.data)
             setError('Failed to fetch reports for verification')
-            
+
             setReportsForVerification([])
             setTotalPages(1)
             setTotalPending(0)
@@ -254,11 +254,10 @@ export default function VerificationPage() {
                     <div className="flex space-x-3">
                         <button
                             onClick={() => setAutoRefresh(!autoRefresh)}
-                            className={`px-4 py-2 border rounded-md text-sm font-medium ${
-                                autoRefresh 
-                                    ? 'bg-green-50 border-green-200 text-green-700' 
+                            className={`px-4 py-2 border rounded-md text-sm font-medium ${autoRefresh
+                                    ? 'bg-green-50 border-green-200 text-green-700'
                                     : 'bg-gray-50 border-gray-200 text-gray-700'
-                            }`}
+                                }`}
                         >
                             {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
                         </button>
@@ -348,13 +347,13 @@ export default function VerificationPage() {
                                 Collapse All
                             </button>
                         </div>
-                        <button
+                        {/* <button
                             onClick={() => router.push('/main/verification')}
                             className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                         >
                             <CheckSquare className="h-5 w-5 mr-2" />
                             Start Global Verification
-                        </button>
+                        </button> */}
                     </div>
                 )}
 
@@ -363,7 +362,7 @@ export default function VerificationPage() {
                     <div className="space-y-4">
                         {Object.entries(reportsByBatch).map(([batchId, { batch, reports }]) => {
                             const isExpanded = expandedBatches.has(Number(batchId))
-                            
+
                             return (
                                 <div key={batchId} className="bg-white shadow rounded-lg overflow-hidden">
                                     {/* Batch Header */}
@@ -386,7 +385,7 @@ export default function VerificationPage() {
                                                 </span>
                                             </div>
                                             <button
-                                                onClick={() => router.push(`/main/verification?batch=${batch.id}`)}
+                                                onClick={() => router.push(`/main/verification?batchId=${batch.id}`)}
                                                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                                             >
                                                 <CheckSquare className="h-4 w-4 mr-2" />
@@ -394,7 +393,7 @@ export default function VerificationPage() {
                                             </button>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Batch Reports Table */}
                                     {isExpanded && (
                                         <div className="overflow-x-auto">
@@ -412,9 +411,6 @@ export default function VerificationPage() {
                                                         </th>
                                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                             Data Quality
-                                                        </th>
-                                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Actions
                                                         </th>
                                                     </tr>
                                                 </thead>
@@ -494,25 +490,6 @@ export default function VerificationPage() {
                                                                     {!report.extracted_data_summary.has_patient_info && !report.extracted_data_summary.has_lab_info && (
                                                                         <span className="text-xs text-gray-500">No quality indicators</span>
                                                                     )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                                <div className="flex items-center space-x-2">
-                                                                    <button
-                                                                        onClick={() => router.push(`/main/verification/review?file=${report.id}&batch=${report.batch.id}`)}
-                                                                        className="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
-                                                                        title="Verify This Report"
-                                                                    >
-                                                                        <Eye className="h-4 w-4 mr-1" />
-                                                                        Verify
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => window.open(report.verification_url, '_blank')}
-                                                                        className="text-green-600 hover:text-green-800 text-sm p-1"
-                                                                        title="Preview Extracted Data"
-                                                                    >
-                                                                        <Download className="h-4 w-4" />
-                                                                    </button>
                                                                 </div>
                                                             </td>
                                                         </tr>

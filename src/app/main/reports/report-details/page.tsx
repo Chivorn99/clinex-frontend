@@ -387,10 +387,6 @@ export default function ReportDetailsPage() {
                         )}
                         {(reportMetadata.status === 'verified' || currentUser.name.includes('Dr.')) && (
                             <>
-                                <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit Data
-                                </button>
                                 {reportMetadata.status === 'verified' && (
                                     <button
                                         onClick={handleExportCsv}
@@ -495,9 +491,55 @@ export default function ReportDetailsPage() {
                 </div>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    {/* Left Column - Patient & Lab Info */}
-                    <div className="xl:col-span-2 space-y-6">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    {/* Left Column - PDF Preview */}
+                    <div className="xl:col-span-5">
+                        <div className="bg-white shadow rounded-lg sticky top-6">
+                            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                                <h3 className="text-lg font-medium text-gray-900">Original Report</h3>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
+                                        className="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    >
+                                        {isPreviewExpanded ? <Minimize className="h-3 w-3" /> : <Maximize className="h-3 w-3" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`p-4 ${isPreviewExpanded ? 'fixed inset-0 z-50 bg-white' : ''}`}>
+                                {pdfLoading ? (
+                                    <div className="flex items-center justify-center h-96">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                        <span className="ml-3 text-gray-600">Loading PDF...</span>
+                                    </div>
+                                ) : pdfError ? (
+                                    <div className="text-center h-96 flex items-center justify-center">
+                                        <div className="text-red-600">{pdfError}</div>
+                                    </div>
+                                ) : (
+                                    <div className="border rounded-lg overflow-hidden" style={{ height: isPreviewExpanded ? '90vh' : '600px' }}>
+                                        <iframe
+                                            src={pdfDataUrl}
+                                            className="w-full h-full"
+                                            title="PDF Preview"
+                                        />
+                                    </div>
+                                )}
+                                {isPreviewExpanded && (
+                                    <button
+                                        onClick={() => setIsPreviewExpanded(false)}
+                                        className="absolute top-4 right-4 inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    >
+                                        <Minimize className="h-4 w-4 mr-2" />
+                                        Close
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column - Patient & Lab Info and Test Results */}
+                    <div className="xl:col-span-7 space-y-6">
                         {(reportMetadata.status === 'processing' || reportMetadata.status === 'processed') && (
                             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
                                 <div className="flex">
@@ -681,52 +723,6 @@ export default function ReportDetailsPage() {
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-
-                    {/* Right Column - PDF Preview */}
-                    <div className="xl:col-span-1">
-                        <div className="bg-white shadow rounded-lg">
-                            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                                <h3 className="text-lg font-medium text-gray-900">Original Report</h3>
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={() => setIsPreviewExpanded(!isPreviewExpanded)}
-                                        className="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                    >
-                                        {isPreviewExpanded ? <Minimize className="h-3 w-3" /> : <Maximize className="h-3 w-3" />}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className={`p-4 ${isPreviewExpanded ? 'fixed inset-0 z-50 bg-white' : ''}`}>
-                                {pdfLoading ? (
-                                    <div className="flex items-center justify-center h-96">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                                        <span className="ml-3 text-gray-600">Loading PDF...</span>
-                                    </div>
-                                ) : pdfError ? (
-                                    <div className="text-center h-96 flex items-center justify-center">
-                                        <div className="text-red-600">{pdfError}</div>
-                                    </div>
-                                ) : (
-                                    <div className="border rounded-lg overflow-hidden" style={{ height: isPreviewExpanded ? '90vh' : '600px' }}>
-                                        <iframe
-                                            src={pdfDataUrl}
-                                            className="w-full h-full"
-                                            title="PDF Preview"
-                                        />
-                                    </div>
-                                )}
-                                {isPreviewExpanded && (
-                                    <button
-                                        onClick={() => setIsPreviewExpanded(false)}
-                                        className="absolute top-4 right-4 inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                    >
-                                        <Minimize className="h-4 w-4 mr-2" />
-                                        Close
-                                    </button>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
